@@ -81,3 +81,6 @@ def test_two_sessions_per_group(all_events):
         assert count == 2, (
             f"{module} {group} has {count} tutorial sessions instead of 2"
         )
+
+# New test cases:
+# sessions should start from 9 and end at 18
