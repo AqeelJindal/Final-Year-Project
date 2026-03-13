@@ -376,6 +376,24 @@ def random_timetable():
 
 # FITNESS FUNCTION
 
+# for sequential constraints
+
+SEQUENTIAL_RULES = {
+    ("lecture", "tutorial"): HARD_PENALTY
+}
+
+events_by_module_type = {}
+
+for idx, event in enumerate(all_events):
+
+    module = event["module"]
+    e_type = event["type"]
+
+    if module not in events_by_module_type:
+        events_by_module_type[module] = {}
+
+    events_by_module_type[module].setdefault(e_type, []).append(idx)
+
 def fitness(timetable):
     # Penalties separated by type
 
@@ -424,32 +442,38 @@ def fitness(timetable):
         # elif e_type == "personal tutorial":
         #     personal_soft += total_soft
 
-    # bookmark: modify this
-    # Sequential Constraints # fix this for (O(n^2))
-    for i, event_i in enumerate(all_events):
-        for j, event_j in enumerate(all_events):
+    # Sequential Constraints-modify it later
+    for (earlier_type, later_type), penalty in SEQUENTIAL_RULES.items():
 
-            if event_i["module"] == event_j["module"]:
+        for module, types in events_by_module_type.items():
 
-                # two sessions of same tutorial group must be conducted after a certain amount of break in between based on lecture timings (later modify to make one tutorial happen after one lecture is done)
+            earlier_events = types.get(earlier_type, [])
+            later_events = types.get(later_type, [])
 
+            for i in earlier_events:
+                for j in later_events:
 
-                # Tutorial must come before lecture
-                if event_i["type"] == "tutorial" and event_j["type"] == "lecture":
-                    if timetable[i] >= timetable[j]:
-                        tutorial_soft += SOFT_MEDIUM
+                    start_i = timetable[i]
+                    start_j = timetable[j]
+
+                    if start_i >= start_j:
+                        hard_penalty += penalty
+
+    # Bookmark: add breaks between each same tutorial
+    # introduce breaks constraints
 
     return \
         (
             hard_penalty,
+            lecture_soft,
             tutorial_soft,
-            # lecture_soft,
             # lab_soft,
             # personal_soft
         )
 
 
 # print(fitness(random_timetable()))
+
 
 # GENETIC OPERATORS
 
@@ -601,4 +625,6 @@ def fitness(timetable):
 # create a testing code to analyse the timetable like it follows all scheduling constraints (lectures, labs, PT)
 # now assign lectures, lab sessions, personal tutorials
 # better the clash preferences that already exist so that it thinks abt all sessions
+# modify sequential constraints to make one tutorial session happen after one lecture session
 # once implemented for all sessions upload on a different branch so that you can later compare your this model (lexicographic) with future models you make better
+# add breaks between sessions too
