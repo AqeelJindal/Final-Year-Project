@@ -371,15 +371,16 @@ def random_timetable():
     return timetable
 
 
-# print(n_events)
-# print(len(random_timetable()))
+print(n_events)
+print(len(random_timetable()))
+print(random_timetable())
 
 # FITNESS FUNCTION
 
 # for sequential constraints
 
 SEQUENTIAL_RULES = {
-    ("lecture", "tutorial"): HARD_PENALTY
+    ("lecture", "tutorial"): SOFT_LARGE
 }
 
 events_by_module_type = {}
@@ -393,6 +394,7 @@ for idx, event in enumerate(all_events):
         events_by_module_type[module] = {}
 
     events_by_module_type[module].setdefault(e_type, []).append(idx)
+
 
 def fitness(timetable):
     # Penalties separated by type
@@ -457,9 +459,10 @@ def fitness(timetable):
                     start_j = timetable[j]
 
                     if start_i >= start_j:
-                        hard_penalty += penalty
+                        lecture_soft += penalty
+                        tutorial_soft += penalty
 
-    # Bookmark: add breaks between each same tutorial
+    # Bookmark: add breaks between each same tutorial, lecture
     # introduce breaks constraints
 
     return \
@@ -477,148 +480,170 @@ def fitness(timetable):
 
 # GENETIC OPERATORS
 
-# # SELECTION (TOURNAMENT)
+# SELECTION (TOURNAMENT)
+
+def select(population):
+    a = random.choice(population)
+    b = random.choice(population)
+    return a if fitness(a) < fitness(b) else b
+
+
+# CROSSOVER (modify it according to duration)
+
+def crossover(p1, p2):
+    point = random.randint(1, len(p1) - 1)
+    return p1[:point] + p2[point:]
+
+
+# MUTATION
+
+def mutate(timetable, rate=0.1):
+    for i in range(len(timetable)):
+        if random.random() < rate:
+            event_type = all_events[i]["type"]
+            timetable[i] = random.choice(valid_start_slots[event_type])
+    return timetable
+
+
+def genetic_algorithm(generations=1001, population_size=50, elite_size=2, mutation_rate=0.1):
+    # Initial population
+    population = [random_timetable() for _ in range(population_size)]
+
+    for gen in range(generations):
+        # Sort population in ascending order by fitness (lexicographic: hard, tutorial, lecture, lab, personal)
+        population.sort(key=fitness)
+
+        # Best individual this generation
+        best = population[0]
+        best_fit = fitness(best)
+
+        # Print best timetable
+        print(f"\nGeneration {gen:3d} | Fitness: {best_fit}")
+        for idx, slot_index in enumerate(best):
+            event = all_events[idx]
+
+            module = event["module"]
+            e_type = event["type"]
+            teacher = event["teacher"]
+
+            # Build group label depending on event type
+            group_info = ""
+
+            if e_type == "tutorial":
+                group_info = f"Tut{event['tutorial_group']}"
+
+            elif e_type == "lecture":
+                group_info = "Lecture"
+
+            # elif e_type == "lab":
+            #     group_info = f"Lab{event['lab_group']}"
+            #
+            # elif e_type == "personal tutorial":
+            #     group_info = (f"PT{event['personal_tutorial_group']}")
+
+            event_name = f"{module} | {e_type} | {group_info} | {teacher}"
+
+            print(f"{event_name:60s} -> {decode_slot(slot_index, event)}")
+
+        # Early stopping if no hard clashes
+        if best_fit[0] == 0:
+            print("\nNo hard clashes! Acceptable timetable found.")
+            return best
+
+        # Elitism: keep top individuals
+        new_population = population[:elite_size]
+
+        # Generate rest of new population
+        while len(new_population) < population_size:
+            parent1 = select(population)
+            parent2 = select(population)
+            child = crossover(parent1, parent2)
+            child = mutate(child, rate=mutation_rate)
+            new_population.append(child)
+
+        # Replace old population
+        population = new_population
+
+
+# # Format timetable neatly
 #
-# def select(population):
-#     a = random.choice(population)
-#     b = random.choice(population)
-#     return a if fitness(a) < fitness(b) else b
+# # Show all columns
+# pd.set_option("display.max_columns", None)
 #
+# # Show all rows
+# pd.set_option("display.max_rows", None)
 #
-# # CROSSOVER
+# # # widen display width so it fits
+# # pd.set_option("display.width", 200)
 #
-# def crossover(p1, p2):
-#     point = random.randint(1, len(p1) - 1)
-#     return p1[:point] + p2[point:]
+# def print_timetable(best, all_events, decode_slot):
+#     rows = []
 #
+#     # Build row data
+#     for idx, slot_index in enumerate(best):
+#         event = all_events[idx]
+#         slot = decode_slot(slot_index)  # e.g. "MON 11:00-12:00"
+#         day, time = slot.split()
 #
-# # MUTATION
+#         session_text = f"{event['module']} {event['group']}\n{event['teacher']}"
 #
-# def mutate(timetable, rate=0.1):
-#     for i in range(len(timetable)):
-#         if random.random() < rate:
-#             event_type = all_events[i]["type"]
-#             timetable[i] = random.choice(valid_start_slots[event_type])
-#     return timetable
+#         rows.append({
+#             "Day": day,
+#             "Time": time,
+#             "Session": session_text
+#         })
 #
+#     df = pd.DataFrame(rows)
 #
-# def genetic_algorithm(generations=1001, population_size=50, elite_size=2, mutation_rate=0.1):
-#     # Initial population
-#     population = [random_timetable() for _ in range(population_size)]
+#     # Combine sessions that share same Day + Time
+#     df = (
+#         df.groupby(["Day", "Time"])["Session"]
+#         .apply(lambda x: "\n\n".join(x))
+#         .reset_index()
+#     )
 #
-#     for gen in range(generations):
-#         # Sort population in ascending order by fitness (lexicographic: hard, tutorial, lecture, lab, personal)
-#         population.sort(key=fitness)
+#     # Create pivot table
+#     timetable = df.pivot(index="Day", columns="Time", values="Session")
 #
-#         # Best individual this generation
-#         best = population[0]
-#         best_fit = fitness(best)
+#     # Sort days properly
+#     day_order = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+#     timetable = timetable.reindex(
+#         sorted(timetable.index, key=lambda d: day_order.index(d))
+#     )
 #
-#         # Print best timetable
-#         print(f"\nGeneration {gen:3d} | Fitness: {best_fit}")
-#         for idx, slot_index in enumerate(best):
-#             event = all_events[idx]
-#             event_name = f"{event['module']} | {event['type']} | {event['group']} | {event['teacher']}"
-#             print(f"{event_name:40s} -> {decode_slot(slot_index, event)}")
+#     # Sort times chronologically
+#     timetable = timetable.reindex(
+#         sorted(timetable.columns, key=lambda t: int(t.split(":")[0])),
+#         axis=1
+#     )
 #
-#         # Early stopping if no hard clashes
-#         if best_fit[0] == 0:
-#             print("\nNo hard clashes! Acceptable timetable found.")
-#             return best
+#     # Replace NaN with empty cell
+#     timetable = timetable.fillna("-")
 #
-#         # Elitism: keep top individuals
-#         new_population = population[:elite_size]
-#
-#         # Generate rest of new population
-#         while len(new_population) < population_size:
-#             parent1 = select(population)
-#             parent2 = select(population)
-#             child = crossover(parent1, parent2)
-#             child = mutate(child, rate=mutation_rate)
-#             new_population.append(child)
-#
-#         # Replace old population
-#         population = new_population
-#
-#
-# # # Format timetable neatly
-# #
-# # # Show all columns
-# # pd.set_option("display.max_columns", None)
-# #
-# # # Show all rows
-# # pd.set_option("display.max_rows", None)
-# #
-# # # # widen display width so it fits
-# # # pd.set_option("display.width", 200)
-# #
-# # def print_timetable(best, all_events, decode_slot):
-# #     rows = []
-# #
-# #     # Build row data
-# #     for idx, slot_index in enumerate(best):
-# #         event = all_events[idx]
-# #         slot = decode_slot(slot_index)  # e.g. "MON 11:00-12:00"
-# #         day, time = slot.split()
-# #
-# #         session_text = f"{event['module']} {event['group']}\n{event['teacher']}"
-# #
-# #         rows.append({
-# #             "Day": day,
-# #             "Time": time,
-# #             "Session": session_text
-# #         })
-# #
-# #     df = pd.DataFrame(rows)
-# #
-# #     # Combine sessions that share same Day + Time
-# #     df = (
-# #         df.groupby(["Day", "Time"])["Session"]
-# #         .apply(lambda x: "\n\n".join(x))
-# #         .reset_index()
-# #     )
-# #
-# #     # Create pivot table
-# #     timetable = df.pivot(index="Day", columns="Time", values="Session")
-# #
-# #     # Sort days properly
-# #     day_order = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
-# #     timetable = timetable.reindex(
-# #         sorted(timetable.index, key=lambda d: day_order.index(d))
-# #     )
-# #
-# #     # Sort times chronologically
-# #     timetable = timetable.reindex(
-# #         sorted(timetable.columns, key=lambda t: int(t.split(":")[0])),
-# #         axis=1
-# #     )
-# #
-# #     # Replace NaN with empty cell
-# #     timetable = timetable.fillna("-")
-# #
-# #     print("\nTimetable:\n")
-# #     print(timetable)
-#
-#
-# # Run GA
-# best_solution = genetic_algorithm()
-# # print_timetable(best_solution, all_events, decode_slot)
-# # Print final timetable once (temporary)
-# print("\nFinal timetable:\n")
-# for idx, slot_index in enumerate(best_solution):
-#     event = all_events[idx]
-#     print(event, "->", decode_slot(slot_index))
-#
-# # ====================== TESTING ======================
-#
-# # from test_timetable import *
-# #
-# # test_teacher_clash(all_events, best_solution, decode_slot)
-# # test_group_clash(all_events, best_solution, decode_slot)
-# # test_teacher_group_limit(all_events)
-# # test_two_sessions_per_group(all_events) # Only for tutorials
-# #
-# # print("All timetable tests passed.")
+#     print("\nTimetable:\n")
+#     print(timetable)
+
+
+# Run GA
+best_solution = genetic_algorithm()
+# print_timetable(best_solution, all_events, decode_slot)
+# Print final timetable once (temporary)
+print("\nFinal timetable:\n")
+for idx, slot_index in enumerate(best_solution):
+    event = all_events[idx]
+    print(event, "->", decode_slot(slot_index, event))
+
+# ====================== TESTING ======================
+
+from test_timetable import *
+
+test_teacher_clash(all_events, best_solution, decode_slot)
+test_group_clash(all_events, best_solution, decode_slot)
+test_teacher_group_limit(all_events)
+test_two_sessions_per_group(all_events)
+test_sessions_within_working_hours(all_events, best_solution, event_duration, HOURS)
+
+print("All timetable tests passed.")
 
 # Bookmark:
 # add git.ignore
