@@ -76,6 +76,7 @@ def test_teacher_group_limit(all_events):
             f"Teacher {teacher} assigned to {len(groups)} tutorial groups: {groups}"
         )
 
+
 # later extend to labs and personal tutorials
 def test_two_sessions_per_group(all_events):
     """
@@ -131,7 +132,43 @@ def test_sessions_within_working_hours(all_events, timetable, event_duration, HO
             f"Session ends after 18:00: {event} ends at {end_hour}"
         )
 
+
+# extend later for labs and personal tutorials
+def test_session_clash(all_events, timetable, decode_slot):
+    """
+    Session clash rules:
+
+    1. Lectures cannot clash with any other session.
+    2. Tutorials of the same group cannot clash.
+    """
+
+    n_events = len(all_events)
+
+    for i in range(n_events):
+        for j in range(i + 1, n_events):
+
+            if timetable[i] != timetable[j]:
+                continue
+
+            e1 = all_events[i]
+            e2 = all_events[j]
+
+            # Rule 1: lectures cannot clash with anything
+            if e1["type"] == "lecture" or e2["type"] == "lecture":
+                assert False, (
+                    f"Lecture clash at {decode_slot(timetable[i], e1)}: "
+                    f"{e1} <-> {e2}"
+                )
+
+            # Rule 2: tutorial group clash
+            if e1["type"] == "tutorial" and e2["type"] == "tutorial":
+                same_group = e1["tutorial_group"] == e2["tutorial_group"]
+
+                assert not (same_group), (
+                    f"Tutorial group clash at {decode_slot(timetable[i], e1)}: "
+                    f"{e1} <-> {e2}"
+                )
+
 # New test cases:
 # check tutorial are after lectures
 # check there are breaks between tutorials
-# session clashes

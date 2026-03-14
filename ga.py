@@ -371,9 +371,9 @@ def random_timetable():
     return timetable
 
 
-print(n_events)
-print(len(random_timetable()))
-print(random_timetable())
+# print(n_events)
+# print(len(random_timetable()))
+# print(random_timetable())
 
 # FITNESS FUNCTION
 
@@ -394,6 +394,40 @@ for idx, event in enumerate(all_events):
         events_by_module_type[module] = {}
 
     events_by_module_type[module].setdefault(e_type, []).append(idx)
+
+# for breaks constraints
+
+SESSION_GAP_RULES = {
+    "lecture": (2, SOFT_LARGE),  # 2 day gap between lecture sessions
+    "tutorial": (3, SOFT_LARGE),  # 3 day gap between tutorial sessions
+    # "lab": (2, SOFT_MEDIUM),
+    # "personal tutorial": (1, SOFT_SMALL)
+}
+
+sessions_by_key = {}
+
+for idx, event in enumerate(all_events):
+
+    e_type = event["type"]
+    module = event["module"]
+
+    if e_type not in SESSION_GAP_RULES:
+        continue
+
+    # Define grouping key depending on session type
+    if e_type == "lecture":
+        key = (module, e_type)
+
+    elif e_type == "tutorial":
+        key = (module, e_type, event["tutorial_group"])
+
+    # elif e_type == "lab":
+    #     key = (module, e_type, event["lab_group"])
+
+    # elif e_type == "personal tutorial":
+    #     key = (module, e_type, event["personal_tutorial_group"])
+
+    sessions_by_key.setdefault(key, []).append(idx)
 
 
 def fitness(timetable):
@@ -462,8 +496,34 @@ def fitness(timetable):
                         lecture_soft += penalty
                         tutorial_soft += penalty
 
-    # Bookmark: add breaks between each same tutorial, lecture
-    # introduce breaks constraints
+    # Break constraints between sessions of the same group and same module
+
+    for key, event_indices in sessions_by_key.items():
+
+        e_type = key[1]
+        min_gap, penalty = SESSION_GAP_RULES[e_type]
+
+        for i in range(len(event_indices)):
+            for j in range(i + 1, len(event_indices)):
+
+                idx_i = event_indices[i]
+                idx_j = event_indices[j]
+
+                slot_i = timetable[idx_i]
+                slot_j = timetable[idx_j]
+
+                day_i = slot_i // len(HOURS)
+                day_j = slot_j // len(HOURS)
+
+                gap = abs(day_i - day_j)
+
+                if gap < min_gap:
+
+                    if e_type == "lecture":
+                        lecture_soft += penalty
+
+                    elif e_type == "tutorial":
+                        tutorial_soft += penalty
 
     return \
         (
@@ -642,12 +702,14 @@ test_group_clash(all_events, best_solution, decode_slot)
 test_teacher_group_limit(all_events)
 test_two_sessions_per_group(all_events)
 test_sessions_within_working_hours(all_events, best_solution, event_duration, HOURS)
+test_session_clash(all_events, best_solution, decode_slot)
 
 print("All timetable tests passed.")
 
 # Bookmark:
+# read code implementation and bookmark in word
 # add git.ignore
-# create a testing code to analyse the timetable like it follows all scheduling constraints (lectures, labs, PT)
+# create a testing code to analyse the timetable like it follows all scheduling constraints
 # now assign lectures, lab sessions, personal tutorials
 # better the clash preferences that already exist so that it thinks abt all sessions
 # modify sequential constraints to make one tutorial session happen after one lecture session
