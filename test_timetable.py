@@ -18,11 +18,11 @@ def test_teacher_clash(all_events, timetable, decode_slot):
             )
 
 
-# Extend this test case to lectures and labs later on
 def test_group_clash(all_events, timetable, decode_slot):
     """
     Two sessions of the same tutorial group cannot happen at the same time.
     Two sessions of the same lecture cannot happen at the same time.
+    Two sessions of the same lab group cannot happen at the same time.
     """
     n_events = len(all_events)
 
@@ -43,7 +43,7 @@ def test_group_clash(all_events, timetable, decode_slot):
                     f"{e1} <-> {e2}"
                 )
 
-            if e1["type"] == "lecture" and e2["type"] == "lecture":
+            elif e1["type"] == "lecture" and e2["type"] == "lecture":
                 same_group = e1["module"] == e2["module"]
 
                 assert not (same_group), (
@@ -51,37 +51,81 @@ def test_group_clash(all_events, timetable, decode_slot):
                     f"{e1} <-> {e2}"
                 )
 
+            elif e1["type"] == "lab" and e2["type"] == "lab":
+                same_group = e1["lab_group"] == e2["lab_group"]
 
-# Extend this test case to labs and personal tutorials later on
+                assert not (same_group), (
+                    f"Lab group clash at {decode_slot(timetable[i], e1)}: "
+                    f"{e1} <-> {e2}"
+                )
+
+
+# Extend this test case to personal tutorials later on
 def test_teacher_group_limit(all_events):
-    """Each teacher must teach at most 2 tutorial groups."""
+    """
+    Each teacher must teach at most:
+    - 2 tutorial groups per module
+    - 1 lab groups per module
+    - lectures for at most 1 module
+    """
 
-    teacher_groups = {}
+    tutorial_groups = {}
+    lab_groups = {}
+    lecture_modules = {}
 
     for event in all_events:
 
-        if event["type"] != "tutorial":
-            continue
-
         teacher = event["teacher"]
-        group = event["tutorial_group"]
+        event_type = event["type"]
+        module = event["module"]
 
-        if teacher not in teacher_groups:
-            teacher_groups[teacher] = set()
+        # ---- Tutorials ----
+        if event_type == "tutorial":
+            group = event["tutorial_group"]
 
-        teacher_groups[teacher].add(group)
+            if teacher not in tutorial_groups:
+                tutorial_groups[teacher] = set()
 
-    for teacher, groups in teacher_groups.items():
+            tutorial_groups[teacher].add((module, group))
+
+        # ---- Labs ----
+        elif event_type == "lab":
+            group = event["lab_group"]
+
+            if teacher not in lab_groups:
+                lab_groups[teacher] = set()
+
+            lab_groups[teacher].add((module, group))
+
+        # ---- Lectures ----
+        elif event_type == "lecture":
+
+            if teacher not in lecture_modules:
+                lecture_modules[teacher] = set()
+
+            lecture_modules[teacher].add(module)
+
+    for teacher, groups in tutorial_groups.items():
         assert len(groups) <= 2, (
             f"Teacher {teacher} assigned to {len(groups)} tutorial groups: {groups}"
         )
 
+    for teacher, groups in lab_groups.items():
+        assert len(groups) <= 1, (
+            f"Teacher {teacher} assigned to {len(groups)} lab groups: {groups}"
+        )
 
-# later extend to labs and personal tutorials
+    for teacher, modules in lecture_modules.items():
+        assert len(modules) <= 1, (
+            f"Teacher {teacher} assigned to lectures for multiple modules: {modules}"
+        )
+
+# later extend to personal tutorials
 def test_two_sessions_per_group(all_events):
     """
     Each tutorial group must have exactly 2 sessions per week.
     Each module must also have exactly 2 lecture sessions per week.
+    Each lab group must have exactly 2 sessions per week.
     """
 
     group_sessions = {}
@@ -96,6 +140,9 @@ def test_two_sessions_per_group(all_events):
 
         elif e_type == "lecture":
             group = 1  # lectures have a single implicit group
+
+        elif e_type == "lab":
+            group = event["lab_group"]
 
         else:
             continue
@@ -133,13 +180,15 @@ def test_sessions_within_working_hours(all_events, timetable, event_duration, HO
         )
 
 
-# extend later for labs and personal tutorials
+# extend later for personal tutorials
 def test_session_clash(all_events, timetable, decode_slot):
     """
     Session clash rules:
 
     1. Lectures cannot clash with any other session.
     2. Tutorials of the same group cannot clash.
+    3. Labs of the same group cannot clash.
+    4. Tutorials under the same lab group cannot clash with Lab and vice versa
     """
 
     n_events = len(all_events)
@@ -169,6 +218,36 @@ def test_session_clash(all_events, timetable, decode_slot):
                     f"{e1} <-> {e2}"
                 )
 
+            # Rule 3: lab group clash
+            if e1["type"] == "lab" and e2["type"] == "lab":
+                same_group = e1["lab_group"] == e2["lab_group"]
+
+                assert not (same_group), (
+                    f"Lab group clash at {decode_slot(timetable[i], e1)}: "
+                    f"{e1} <-> {e2}"
+                )
+
+            # Rule 4: lab vs tutorial clash
+            if (e1["type"] == "lab" and e2["type"] == "tutorial") or (e1["type"] == "tutorial" and e2["type"] == "lab"):
+
+                if e1["type"] == "lab":
+                    tut_event = e2
+                    lab_event = e1
+                else:
+                    tut_event = e1
+                    lab_event = e2
+
+                tut_lab_group = tut_event["lab_group"]
+                lab_group = lab_event["lab_group"]
+
+                same_group = tut_lab_group == lab_group
+
+                assert not (same_group), (
+                    f"Lab and Tut group clash at {decode_slot(timetable[i], e1)}: "
+                    f"{e1} <-> {e2}"
+                )
+
 # New test cases:
 # check tutorial are after lectures
 # check there are breaks between tutorials
+# build test cases for soft constraints too

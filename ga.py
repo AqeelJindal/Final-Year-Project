@@ -8,9 +8,9 @@ import pandas as pd
 
 Staff = \
     {
-        "COMP2399": ["Amy", "Paulie", "Mark", "Sam", "Noleen"],  # the first teacher in the list represents the lecturer
-        "COMP2244": ["Owen", "John", "Tom", "Haiko", "Alan", "Rob"],
-        "COMP2579": ["Natasha", "Sarah", "Max", "Dibayan"],
+        "COMP2399": ["Amy", "Paulie", "Mark", "Sam", "Noleen", "Norah", "Aryan"],  # the first teacher in the list represents the lecturer
+        "COMP2244": ["Massimiliano", "John", "Tom", "Haiko", "Alan", "Rob"],
+        "COMP2579": ["Natasha", "Sarah", "Max", "Dibayan", "Gori", "Arshad", "Xeung", "Xi"],
     }
 
 # GLOBAL VARIABLES (Add other global variables here)
@@ -54,22 +54,23 @@ all_teachers = []
 for teacher_list in Staff.values():
     all_teachers.extend(teacher_list)
 
-# Separate loads for each teacher based on the session, to limit the amount of groups a teacher can have
-lecture_load = {t: 0 for t in all_teachers}
-tutorial_load = {t: 0 for t in all_teachers}
+#  loads for each teacher, to limit the amount of groups a teacher can have
+#  each teacher will have at most the highest number in max group parameter while creating modules
+teacher_load = {t: 0 for t in all_teachers}
 
 Modules = {}
 
 for module_code, teachers in Staff.items():
     Modules[module_code] = \
         {
-            "Lecture": create_groups(teachers, all_teachers, LECTURE_GROUPS, lecture_load, 1),
-            # "Lab session": create_groups(teachers, 3),
-            "tutorials": create_groups(teachers, all_teachers, TUTORIAL_GROUPS, tutorial_load, 2),
+            "Lecture": create_groups(teachers, all_teachers, LECTURE_GROUPS, teacher_load, 1), # a teacher will not necessariliy have equal to the max groups limit amount of groups
+            "Lab session": create_groups(teachers, all_teachers, LAB_GROUPS, teacher_load, 1),
+            "tutorials": create_groups(teachers, all_teachers, TUTORIAL_GROUPS, teacher_load, 2),
             # "Personal Tutorials": create_groups(all_teachers, 27),
         }
 
 # print(Modules)
+# print(teacher_load)
 
 # GLOBAL CONSTRAINTS
 HARD_PENALTY = 10 ** 6
@@ -94,25 +95,25 @@ nL_lec = len(lecture_events)
 
 # print(lecture_events)
 
-# # LAB SESSION
-#
-# lab_events = []
-#
-# for module_name, module_data in Modules.items():
-#     for group_name, info in module_data["Lab session"].items():
-#
-#         lab_group = int(group_name.replace("Group", ""))
-#
-#         lab_events.append({
-#             "type": "lab",
-#             "module": module_name,
-#             "lab_group": lab_group,
-#             "teacher": info["teacher"]
-#         })
-#
-# nL_lab = len(lab_events)
-#
-# # print(lab_events)
+# LAB SESSION
+
+lab_events = []
+
+for module_name, module_data in Modules.items():
+    for group_name, info in module_data["Lab session"].items():
+
+        lab_group = int(group_name.replace("Group", ""))
+        for session in range(2):  # two sessions per week
+            lab_events.append({
+                "type": "lab",
+                "module": module_name,
+                "lab_group": lab_group,
+                "teacher": info["teacher"]
+            })
+
+nL_lab = len(lab_events)
+
+# print(lab_events)
 
 
 # TUTORIALS
@@ -176,10 +177,11 @@ nL_tut = len(tutorial_events)
 # print(per_tut_events)
 #
 # UNIFIED EVENT LIST
-all_events = (
+all_events = \
+(
         lecture_events
-        # + lab_events
         + tutorial_events
+        + lab_events
     # + per_tut_events
 )
 
@@ -192,7 +194,7 @@ n_events = len(all_events)
 event_duration = {
     "lecture": 2,
     "tutorial": 1,
-    # "lab": 1,
+    "lab": 1,
     # "personal tutorial": 1
 }
 
@@ -254,11 +256,16 @@ for i in range(n_events):
         type_i = event_i["type"]
         type_j = event_j["type"]
 
-        # # RULE 1: Labs cannot be parallel
+        # # RULE 1: Labs vs Labs clashes
         # if type_i == "lab" and type_j == "lab":
-        #     C[i][j] = HARD_PENALTY
+        #     lab_i = event_i["lab_group"]
+        #     lab_j = event_j["lab_group"]
+        #
+        #     # Same lab group cannot overlap
+        #     if lab_i == lab_j:
+        #         C[i][j] = HARD_PENALTY
 
-        # RULE 2: Tutorial clashes
+        # RULE 2: Tutorial vs Tutorial clashes
         if type_i == "tutorial" and type_j == "tutorial":
 
             tut_i = event_i["tutorial_group"]
@@ -267,14 +274,30 @@ for i in range(n_events):
             # Same tutorial group cannot overlap
             if tut_i == tut_j:
                 C[i][j] = HARD_PENALTY
-            else:
-                C[i][j] = 0
 
-        # RULE 3: Same teacher cannot teach two events at the same time
+        # # RULE 3: Tutorial vs Lab clashes
+        # if (type_i == "tutorial" and type_j == "lab") or (type_i == "lab" and type_j == "tutorial"):
+        #
+        #     # Identify tutorial and lab event
+        #     if type_i == "tutorial":
+        #         tut_event = event_i
+        #         lab_event = event_j
+        #     else:
+        #         tut_event = event_j
+        #         lab_event = event_i
+        #
+        #     tut_lab_group = tut_event["lab_group"]
+        #     lab_group = lab_event["lab_group"]
+        #
+        #     # Clash only if same lab group
+        #     if tut_lab_group == lab_group:
+        #         C[i][j] = HARD_PENALTY
+
+        # RULE 4: Same teacher cannot teach two events at the same time
         if teacher_i == teacher_j:
             C[i][j] = HARD_PENALTY
 
-        # RULE 4: Lectures clash with everything
+        # RULE 5: Lectures clash with everything
         if type_i == "lecture" or type_j == "lecture":
             C[i][j] = HARD_PENALTY
 
@@ -339,8 +362,8 @@ for slot in range(nG):
     day = DAYS[day_index]
     hour = HOURS[hour_index]
 
-    # Students prefer lectures/tutorial before 17:00
-    if hour >= 17:
+    # Students prefer lectures/tutorial before 16:00
+    if hour >= 16:
         student_time_preferences["ALL_STUDENTS"]["lecture"][slot] = SOFT_MEDIUM
         student_time_preferences["ALL_STUDENTS"]["tutorial"][slot] = SOFT_MEDIUM
 
@@ -398,10 +421,9 @@ for idx, event in enumerate(all_events):
 # for breaks constraints
 
 SESSION_GAP_RULES = {
-    "lecture": (2, SOFT_LARGE),  # 2 day gap between lecture sessions
+    "lecture": (1, SOFT_LARGE),  # 2 day gap between lecture sessions
     "tutorial": (3, SOFT_LARGE),  # 3 day gap between tutorial sessions
-    # "lab": (2, SOFT_MEDIUM),
-    # "personal tutorial": (1, SOFT_SMALL)
+    "lab": (1, SOFT_LARGE),
 }
 
 sessions_by_key = {}
@@ -421,8 +443,8 @@ for idx, event in enumerate(all_events):
     elif e_type == "tutorial":
         key = (module, e_type, event["tutorial_group"])
 
-    # elif e_type == "lab":
-    #     key = (module, e_type, event["lab_group"])
+    elif e_type == "lab":
+        key = (module, e_type, event["lab_group"])
 
     # elif e_type == "personal tutorial":
     #     key = (module, e_type, event["personal_tutorial_group"])
@@ -436,7 +458,7 @@ def fitness(timetable):
     hard_penalty = 0
     tutorial_soft = 0
     lecture_soft = 0
-    # lab_soft = 0
+    lab_soft = 0
     # personal_soft = 0
 
     # Clash
@@ -471,10 +493,10 @@ def fitness(timetable):
 
         elif e_type == "lecture":
             lecture_soft += total_soft
-        #
-        # elif e_type == "lab":
-        #     lab_soft += total_soft
-        #
+
+        elif e_type == "lab":
+            lab_soft += total_soft
+
         # elif e_type == "personal tutorial":
         #     personal_soft += total_soft
 
@@ -525,12 +547,15 @@ def fitness(timetable):
                     elif e_type == "tutorial":
                         tutorial_soft += penalty
 
+                    elif e_type == "lab":
+                        lab_soft += penalty
+
     return \
         (
             hard_penalty,
             lecture_soft,
             tutorial_soft,
-            # lab_soft,
+            lab_soft,
             # personal_soft
         )
 
@@ -595,9 +620,9 @@ def genetic_algorithm(generations=1001, population_size=50, elite_size=2, mutati
             elif e_type == "lecture":
                 group_info = "Lecture"
 
-            # elif e_type == "lab":
-            #     group_info = f"Lab{event['lab_group']}"
-            #
+            elif e_type == "lab":
+                group_info = f"Lab{event['lab_group']}"
+
             # elif e_type == "personal tutorial":
             #     group_info = (f"PT{event['personal_tutorial_group']}")
 
@@ -685,7 +710,13 @@ def genetic_algorithm(generations=1001, population_size=50, elite_size=2, mutati
 
 
 # Run GA
-best_solution = genetic_algorithm()
+
+best_solution = None
+while best_solution is None:
+    best_solution = genetic_algorithm()
+
+# best_solution = genetic_algorithm()
+
 # print_timetable(best_solution, all_events, decode_slot)
 # Print final timetable once (temporary)
 print("\nFinal timetable:\n")
@@ -707,11 +738,12 @@ test_session_clash(all_events, best_solution, decode_slot)
 print("All timetable tests passed.")
 
 # Bookmark:
-# read code implementation and bookmark in word
+# fix labs issue in the timetable in clash matrix
+# analyse the timetable
 # add git.ignore
 # create a testing code to analyse the timetable like it follows all scheduling constraints
-# now assign lectures, lab sessions, personal tutorials
+# now assign  lab sessions, personal tutorials
 # better the clash preferences that already exist so that it thinks abt all sessions
 # modify sequential constraints to make one tutorial session happen after one lecture session
 # once implemented for all sessions upload on a different branch so that you can later compare your this model (lexicographic) with future models you make better
-# add breaks between sessions too
+# add breaks between sessions too in hours/days
