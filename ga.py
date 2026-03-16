@@ -66,7 +66,7 @@ for module_code, teachers in Staff.items():
         {
             "Lecture": create_groups(teachers, all_teachers, LECTURE_GROUPS, teacher_load, 1),
             # a teacher will not necessariliy have equal to the max groups limit amount of groups
-            "Lab session": create_groups(teachers, all_teachers, LAB_GROUPS, teacher_load, 1),
+            # "Lab session": create_groups(teachers, all_teachers, LAB_GROUPS, teacher_load, 1),
             "tutorials": create_groups(teachers, all_teachers, TUTORIAL_GROUPS, teacher_load, 2),
             # "Personal Tutorials": create_groups(all_teachers, 27),
         }
@@ -97,25 +97,25 @@ nL_lec = len(lecture_events)
 
 # print(lecture_events)
 
-# LAB SESSION
-
-lab_events = []
-
-for module_name, module_data in Modules.items():
-    for group_name, info in module_data["Lab session"].items():
-
-        lab_group = int(group_name.replace("Group", ""))
-        for session in range(2):  # two sessions per week
-            lab_events.append({
-                "type": "lab",
-                "module": module_name,
-                "lab_group": lab_group,
-                "teacher": info["teacher"]
-            })
-
-nL_lab = len(lab_events)
-
-# print(lab_events)
+# # LAB SESSION
+#
+# lab_events = []
+#
+# for module_name, module_data in Modules.items():
+#     for group_name, info in module_data["Lab session"].items():
+#
+#         lab_group = int(group_name.replace("Group", ""))
+#         for session in range(2):  # two sessions per week
+#             lab_events.append({
+#                 "type": "lab",
+#                 "module": module_name,
+#                 "lab_group": lab_group,
+#                 "teacher": info["teacher"]
+#             })
+#
+# nL_lab = len(lab_events)
+#
+# # print(lab_events)
 
 
 # TUTORIALS
@@ -183,7 +183,7 @@ all_events = \
     (
             lecture_events
             + tutorial_events
-            + lab_events
+            # + lab_events
         # + per_tut_events
     )
 
@@ -196,7 +196,7 @@ n_events = len(all_events)
 event_duration = {
     "lecture": 2,
     "tutorial": 1,
-    "lab": 1,
+    # "lab": 1,
     # "personal tutorial": 1
 }
 
@@ -258,14 +258,14 @@ for i in range(n_events):
         type_i = event_i["type"]
         type_j = event_j["type"]
 
-        # RULE 1: Labs vs Labs clashes
-        if type_i == "lab" and type_j == "lab":
-            lab_i = event_i["lab_group"]
-            lab_j = event_j["lab_group"]
-
-            # Same lab group cannot overlap
-            if lab_i == lab_j:
-                C[i][j] = HARD_PENALTY
+        # # RULE 1: Labs vs Labs clashes
+        # if type_i == "lab" and type_j == "lab":
+        #     lab_i = event_i["lab_group"]
+        #     lab_j = event_j["lab_group"]
+        #
+        #     # Same lab group cannot overlap
+        #     if lab_i == lab_j:
+        #         C[i][j] = HARD_PENALTY
 
         # RULE 2: Tutorial vs Tutorial clashes
         if type_i == "tutorial" and type_j == "tutorial":
@@ -277,23 +277,23 @@ for i in range(n_events):
             if tut_i == tut_j:
                 C[i][j] = HARD_PENALTY
 
-        # RULE 3: Tutorial vs Lab clashes
-        if (type_i == "tutorial" and type_j == "lab") or (type_i == "lab" and type_j == "tutorial"):
-
-            # Identify tutorial and lab event
-            if type_i == "tutorial":
-                tut_event = event_i
-                lab_event = event_j
-            else:
-                tut_event = event_j
-                lab_event = event_i
-
-            tut_lab_group = tut_event["lab_group"]
-            lab_group = lab_event["lab_group"]
-
-            # Clash only if same lab group
-            if tut_lab_group == lab_group:
-                C[i][j] = HARD_PENALTY
+        # # RULE 3: Tutorial vs Lab clashes
+        # if (type_i == "tutorial" and type_j == "lab") or (type_i == "lab" and type_j == "tutorial"):
+        #
+        #     # Identify tutorial and lab event
+        #     if type_i == "tutorial":
+        #         tut_event = event_i
+        #         lab_event = event_j
+        #     else:
+        #         tut_event = event_j
+        #         lab_event = event_i
+        #
+        #     tut_lab_group = tut_event["lab_group"]
+        #     lab_group = lab_event["lab_group"]
+        #
+        #     # Clash only if same lab group
+        #     if tut_lab_group == lab_group:
+        #         C[i][j] = HARD_PENALTY
 
         # RULE 4: Same teacher cannot teach two events at the same time
         if teacher_i == teacher_j:
@@ -425,7 +425,7 @@ for idx, event in enumerate(all_events):
 SESSION_GAP_RULES = {
     "lecture": (1, SOFT_LARGE),  # 2 day gap between lecture sessions
     "tutorial": (3, SOFT_LARGE),  # 3 day gap between tutorial sessions
-    "lab": (1, SOFT_LARGE),
+    # "lab": (1, SOFT_LARGE),
 }
 
 sessions_by_key = {}
@@ -445,8 +445,8 @@ for idx, event in enumerate(all_events):
     elif e_type == "tutorial":
         key = (module, e_type, event["tutorial_group"])
 
-    elif e_type == "lab":
-        key = (module, e_type, event["lab_group"])
+    # elif e_type == "lab":
+    #     key = (module, e_type, event["lab_group"])
 
     # elif e_type == "personal tutorial":
     #     key = (module, e_type, event["personal_tutorial_group"])
@@ -460,7 +460,7 @@ def fitness(timetable):
     hard_penalty = 0
     tutorial_soft = 0
     lecture_soft = 0
-    lab_soft = 0
+    # lab_soft = 0
     # personal_soft = 0
 
     # Clash
@@ -496,8 +496,8 @@ def fitness(timetable):
         elif e_type == "lecture":
             lecture_soft += total_soft
 
-        elif e_type == "lab":
-            lab_soft += total_soft
+        # elif e_type == "lab":
+        #     lab_soft += total_soft
 
         # elif e_type == "personal tutorial":
         #     personal_soft += total_soft
@@ -549,15 +549,15 @@ def fitness(timetable):
                     elif e_type == "tutorial":
                         tutorial_soft += penalty
 
-                    elif e_type == "lab":
-                        lab_soft += penalty
+                    # elif e_type == "lab":
+                    #     lab_soft += penalty
 
     return \
         (
             hard_penalty,
             lecture_soft,
             tutorial_soft,
-            lab_soft,
+            # lab_soft,
             # personal_soft
         )
 
@@ -592,135 +592,169 @@ def mutate(timetable, rate=0.1):
     return timetable
 
 
-def genetic_algorithm(generations=1001, population_size=100, elite_size=10, mutation_rate=0.3):
-    # Initial population
+def genetic_algorithm(generations=1001, population_size=50, elite_size=3, mutation_rate=0.1, stagnation_limit=50):
+
+    # =============================
+    # PHASE 1: FIND FEASIBLE SOLUTION
+    # =============================
+
+    print("\n--- Phase 1: Searching for feasible timetable ---")
+
     population = [random_timetable() for _ in range(population_size)]
+    feasible_solution = None
 
     for gen in range(generations):
-        # Sort population in ascending order by fitness (lexicographic: hard, tutorial, lecture, lab, personal)
-        population.sort(key=fitness)
 
-        # Best individual this generation
+        population.sort(key=fitness)
         best = population[0]
         best_fit = fitness(best)
 
-        # Print best timetable
-        print(f"\nGeneration {gen:3d} | Fitness: {best_fit}")
-        for idx, slot_index in enumerate(best):
-            event = all_events[idx]
+        print(f"Phase1 Gen {gen:3d} | Hard penalty: {best_fit[0]}")
 
-            module = event["module"]
-            e_type = event["type"]
-            teacher = event["teacher"]
-
-            # Build group label depending on event type
-            group_info = ""
-
-            if e_type == "tutorial":
-                group_info = f"Tut{event['tutorial_group']}"
-
-            elif e_type == "lecture":
-                group_info = "Lecture"
-
-            elif e_type == "lab":
-                group_info = f"Lab{event['lab_group']}"
-
-            # elif e_type == "personal tutorial":
-            #     group_info = (f"PT{event['personal_tutorial_group']}")
-
-            event_name = f"{module} | {e_type} | {group_info} | {teacher}"
-
-            print(f"{event_name:60s} -> {decode_slot(slot_index, event)}")
-
-        # Early stopping if no hard clashes
         if best_fit[0] == 0:
-            print("\nNo hard clashes! Acceptable timetable found.")
-            return best
+            feasible_solution = best
+            print("\nFeasible timetable found!")
+            break
 
-        # Elitism: keep top individuals
         new_population = population[:elite_size]
 
-        # Generate rest of new population
         while len(new_population) < population_size:
             parent1 = select(population)
             parent2 = select(population)
+
             child = crossover(parent1, parent2)
             child = mutate(child, rate=mutation_rate)
+
             new_population.append(child)
 
-        # Replace old population
         population = new_population
 
+    if feasible_solution is None:
+        print("\nNo feasible timetable found.")
+        return None
 
-# # Format timetable neatly
-#
-# # Show all columns
-# pd.set_option("display.max_columns", None)
-#
-# # Show all rows
-# pd.set_option("display.max_rows", None)
-#
-# # # widen display width so it fits
-# # pd.set_option("display.width", 200)
-#
-# def print_timetable(best, all_events, decode_slot):
-#     rows = []
-#
-#     # Build row data
-#     for idx, slot_index in enumerate(best):
-#         event = all_events[idx]
-#         slot = decode_slot(slot_index)  # e.g. "MON 11:00-12:00"
-#         day, time = slot.split()
-#
-#         session_text = f"{event['module']} {event['group']}\n{event['teacher']}"
-#
-#         rows.append({
-#             "Day": day,
-#             "Time": time,
-#             "Session": session_text
-#         })
-#
-#     df = pd.DataFrame(rows)
-#
-#     # Combine sessions that share same Day + Time
-#     df = (
-#         df.groupby(["Day", "Time"])["Session"]
-#         .apply(lambda x: "\n\n".join(x))
-#         .reset_index()
-#     )
-#
-#     # Create pivot table
-#     timetable = df.pivot(index="Day", columns="Time", values="Session")
-#
-#     # Sort days properly
-#     day_order = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
-#     timetable = timetable.reindex(
-#         sorted(timetable.index, key=lambda d: day_order.index(d))
-#     )
-#
-#     # Sort times chronologically
-#     timetable = timetable.reindex(
-#         sorted(timetable.columns, key=lambda t: int(t.split(":")[0])),
-#         axis=1
-#     )
-#
-#     # Replace NaN with empty cell
-#     timetable = timetable.fillna("-")
-#
-#     print("\nTimetable:\n")
-#     print(timetable)
+    # =============================
+    # PHASE 2: OPTIMISE SOFT PENALTIES
+    # =============================
+
+    print("\n--- Phase 2: Optimising soft penalties ---")
+
+    # Create population around feasible timetable
+    population = [feasible_solution]
+
+    while len(population) < population_size:
+        new_individual = mutate(feasible_solution.copy(), rate=0.1)
+        population.append(new_individual)
+
+    best_solution = feasible_solution
+
+    stagnant_generations = 0
+
+    for gen in range(generations):
+
+        population.sort(key=fitness)
+
+        best = population[0]
+        best_fit = fitness(best)
+
+        print(f"Phase2 Gen {gen:3d} | Fitness: {best_fit}")
+
+        if best_fit < fitness(best_solution):
+            best_solution = best
+            stagnant_generations = 0
+        else:
+            stagnant_generations += 1
+
+        # Early stop if stagnated
+        if stagnant_generations >= stagnation_limit:
+            print(f"\nNo improvement for {stagnation_limit} generations. Stopping early.")
+            break
+
+        new_population = population[:elite_size]
+
+        while len(new_population) < population_size:
+            parent1 = select(population)
+            parent2 = select(population)
+
+            child = crossover(parent1, parent2)
+            child = mutate(child, rate=mutation_rate)
+
+            # keep only feasible children
+            if fitness(child)[0] == 0:
+                new_population.append(child)
+
+        population = new_population
+
+    return best_solution
+
+
+# Format timetable neatly
+
+def format_university_timetable(best_solution, all_events):
+
+    DAYS = ["MON", "TUE", "WED", "THU", "FRI"]
+    HOURS = list(range(9, 18))
+
+    # Create timetable grid
+    timetable = {day: {hour: [] for hour in HOURS} for day in DAYS}
+
+    for idx, slot in enumerate(best_solution):
+
+        event = all_events[idx]
+        duration = event_duration[event["type"]]
+
+        day_index = slot // len(HOURS)
+        hour_index = slot % len(HOURS)
+
+        day = DAYS[day_index]
+        start_hour = HOURS[hour_index]
+
+        module = event["module"]
+        teacher = event["teacher"]
+        e_type = event["type"]
+
+        if e_type == "lecture":
+            group = "Lecture"
+        else:
+            group = f"Tut{event['tutorial_group']}"
+
+        label = f"{module} {group} ({teacher})"
+
+        # Fill each hour the event occupies
+        for h in range(duration):
+            timetable[day][start_hour + h].append(label)
+
+    # Print table header
+    header = ["Day"] + [f"{h}-{h+1}" for h in HOURS]
+    print("\nUniversity Timetable:\n")
+    print("{:<5}".format(header[0]), end=" ")
+
+    for col in header[1:]:
+        print("{:^25}".format(col), end=" ")
+    print()
+
+    # Print rows
+    for day in DAYS:
+
+        print("{:<5}".format(day), end=" ")
+
+        for hour in HOURS:
+
+            cell = "\n".join(timetable[day][hour]) if timetable[day][hour] else "-"
+
+            print("{:^25}".format(cell), end=" ")
+
+        print("\n")
 
 
 # Run GA
 
-best_solution = genetic_algorithm()
+best_solution = None
 
-# print_timetable(best_solution, all_events, decode_slot)
-# Print final timetable once (temporary)
-print("\nFinal timetable:\n")
-for idx, slot_index in enumerate(best_solution):
-    event = all_events[idx]
-    print(event, "->", decode_slot(slot_index, event))
+while best_solution is None:
+    best_solution = genetic_algorithm()
+
+format_university_timetable(best_solution, all_events)
 
 # ====================== TESTING ======================
 
@@ -736,7 +770,7 @@ test_session_clash(all_events, best_solution, decode_slot)
 print("All timetable tests passed.")
 
 # Bookmark:
-# produce timetable without labs
+# modify ga-analyse tt, format tt nicely-use the function created
 # analyse the timetable
 # add git.ignore
 # create a testing code to analyse the timetable like it follows all scheduling constraints
