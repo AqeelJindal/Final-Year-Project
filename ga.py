@@ -8,9 +8,10 @@ import pandas as pd
 
 Staff = \
     {
-        "COMP2399": ["Amy", "Paulie", "Mark", "Sam", "Noleen", "Norah", "Aryan"],  # the first teacher in the list represents the lecturer
-        "COMP2244": ["Massimiliano", "John", "Tom", "Haiko", "Alan", "Rob"],
-        "COMP2579": ["Natasha", "Sarah", "Max", "Dibayan", "Gori", "Arshad", "Xeung", "Xi"],
+        "COMP2399": ["Amy", "Paulie", "Mark", "Oana", "Noleen", "Norah", "Aryan", "Alice", "Ojas", "Meheraab"],
+        # the first teacher in the list represents the lecturer
+        "COMP2244": ["Massimiliano", "Adri", "Tom", "Haiko", "Alan", "Rob", "Naila"],
+        "COMP2579": ["Natasha", "Sarah", "Max", "Andrei", "Gori", "Arshad", "Xeung", "Xi"],
     }
 
 # GLOBAL VARIABLES (Add other global variables here)
@@ -63,7 +64,8 @@ Modules = {}
 for module_code, teachers in Staff.items():
     Modules[module_code] = \
         {
-            "Lecture": create_groups(teachers, all_teachers, LECTURE_GROUPS, teacher_load, 1), # a teacher will not necessariliy have equal to the max groups limit amount of groups
+            "Lecture": create_groups(teachers, all_teachers, LECTURE_GROUPS, teacher_load, 1),
+            # a teacher will not necessariliy have equal to the max groups limit amount of groups
             "Lab session": create_groups(teachers, all_teachers, LAB_GROUPS, teacher_load, 1),
             "tutorials": create_groups(teachers, all_teachers, TUTORIAL_GROUPS, teacher_load, 2),
             # "Personal Tutorials": create_groups(all_teachers, 27),
@@ -178,12 +180,12 @@ nL_tut = len(tutorial_events)
 #
 # UNIFIED EVENT LIST
 all_events = \
-(
-        lecture_events
-        + tutorial_events
-        + lab_events
-    # + per_tut_events
-)
+    (
+            lecture_events
+            + tutorial_events
+            + lab_events
+        # + per_tut_events
+    )
 
 n_events = len(all_events)
 
@@ -256,14 +258,14 @@ for i in range(n_events):
         type_i = event_i["type"]
         type_j = event_j["type"]
 
-        # # RULE 1: Labs vs Labs clashes
-        # if type_i == "lab" and type_j == "lab":
-        #     lab_i = event_i["lab_group"]
-        #     lab_j = event_j["lab_group"]
-        #
-        #     # Same lab group cannot overlap
-        #     if lab_i == lab_j:
-        #         C[i][j] = HARD_PENALTY
+        # RULE 1: Labs vs Labs clashes
+        if type_i == "lab" and type_j == "lab":
+            lab_i = event_i["lab_group"]
+            lab_j = event_j["lab_group"]
+
+            # Same lab group cannot overlap
+            if lab_i == lab_j:
+                C[i][j] = HARD_PENALTY
 
         # RULE 2: Tutorial vs Tutorial clashes
         if type_i == "tutorial" and type_j == "tutorial":
@@ -275,23 +277,23 @@ for i in range(n_events):
             if tut_i == tut_j:
                 C[i][j] = HARD_PENALTY
 
-        # # RULE 3: Tutorial vs Lab clashes
-        # if (type_i == "tutorial" and type_j == "lab") or (type_i == "lab" and type_j == "tutorial"):
-        #
-        #     # Identify tutorial and lab event
-        #     if type_i == "tutorial":
-        #         tut_event = event_i
-        #         lab_event = event_j
-        #     else:
-        #         tut_event = event_j
-        #         lab_event = event_i
-        #
-        #     tut_lab_group = tut_event["lab_group"]
-        #     lab_group = lab_event["lab_group"]
-        #
-        #     # Clash only if same lab group
-        #     if tut_lab_group == lab_group:
-        #         C[i][j] = HARD_PENALTY
+        # RULE 3: Tutorial vs Lab clashes
+        if (type_i == "tutorial" and type_j == "lab") or (type_i == "lab" and type_j == "tutorial"):
+
+            # Identify tutorial and lab event
+            if type_i == "tutorial":
+                tut_event = event_i
+                lab_event = event_j
+            else:
+                tut_event = event_j
+                lab_event = event_i
+
+            tut_lab_group = tut_event["lab_group"]
+            lab_group = lab_event["lab_group"]
+
+            # Clash only if same lab group
+            if tut_lab_group == lab_group:
+                C[i][j] = HARD_PENALTY
 
         # RULE 4: Same teacher cannot teach two events at the same time
         if teacher_i == teacher_j:
@@ -590,7 +592,7 @@ def mutate(timetable, rate=0.1):
     return timetable
 
 
-def genetic_algorithm(generations=1001, population_size=50, elite_size=2, mutation_rate=0.1):
+def genetic_algorithm(generations=1001, population_size=100, elite_size=10, mutation_rate=0.3):
     # Initial population
     population = [random_timetable() for _ in range(population_size)]
 
@@ -711,11 +713,7 @@ def genetic_algorithm(generations=1001, population_size=50, elite_size=2, mutati
 
 # Run GA
 
-best_solution = None
-while best_solution is None:
-    best_solution = genetic_algorithm()
-
-# best_solution = genetic_algorithm()
+best_solution = genetic_algorithm()
 
 # print_timetable(best_solution, all_events, decode_slot)
 # Print final timetable once (temporary)
@@ -738,7 +736,7 @@ test_session_clash(all_events, best_solution, decode_slot)
 print("All timetable tests passed.")
 
 # Bookmark:
-# fix labs issue in the timetable in clash matrix
+# produce timetable without labs
 # analyse the timetable
 # add git.ignore
 # create a testing code to analyse the timetable like it follows all scheduling constraints
