@@ -183,7 +183,7 @@ all_events = \
     (
             lecture_events
             + tutorial_events
-            # + lab_events
+        # + lab_events
         # + per_tut_events
     )
 
@@ -592,8 +592,7 @@ def mutate(timetable, rate=0.1):
     return timetable
 
 
-def genetic_algorithm(generations=1001, population_size=50, elite_size=3, mutation_rate=0.1, stagnation_limit=50):
-
+def genetic_algorithm(generations=1001, population_size=50, elite_size=3, mutation_rate=0.1, stagnation_limit=100):
     # =============================
     # PHASE 1: FIND FEASIBLE SOLUTION
     # =============================
@@ -689,13 +688,15 @@ def genetic_algorithm(generations=1001, population_size=50, elite_size=3, mutati
 
 
 # Format timetable neatly
+#Bookmark-understand code
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
-def format_university_timetable(best_solution, all_events):
 
-    DAYS = ["MON", "TUE", "WED", "THU", "FRI"]
-    HOURS = list(range(9, 18))
+def plot_timetable(best_solution, all_events, DAYS, HOURS):
+    fig, ax = plt.subplots(figsize=(18, 7))
 
-    # Create timetable grid
+    # Store events per slot
     timetable = {day: {hour: [] for hour in HOURS} for day in DAYS}
 
     for idx, slot in enumerate(best_solution):
@@ -707,44 +708,85 @@ def format_university_timetable(best_solution, all_events):
         hour_index = slot % len(HOURS)
 
         day = DAYS[day_index]
-        start_hour = HOURS[hour_index]
 
         module = event["module"]
         teacher = event["teacher"]
-        e_type = event["type"]
 
-        if e_type == "lecture":
-            group = "Lecture"
+        if event["type"] == "lecture":
+            label = f"{module}\nLecture\n{teacher}"
         else:
-            group = f"Tut{event['tutorial_group']}"
+            label = f"{module}\nTut{event['tutorial_group']}\n{teacher}"
 
-        label = f"{module} {group} ({teacher})"
-
-        # Fill each hour the event occupies
+        # Fill slots for duration
         for h in range(duration):
-            timetable[day][start_hour + h].append(label)
+            timetable[day][HOURS[hour_index + h]].append(label)
 
-    # Print table header
-    header = ["Day"] + [f"{h}-{h+1}" for h in HOURS]
-    print("\nUniversity Timetable:\n")
-    print("{:<5}".format(header[0]), end=" ")
+    # Module colours
+    module_colors = {
+        "COMP2399": "#8dd3c7",
+        "COMP2244": "#bebada",
+        "COMP2579": "#fb8072"
+    }
 
-    for col in header[1:]:
-        print("{:^25}".format(col), end=" ")
-    print()
+    # Spacing parameters
+    padding_x = 0.05
+    padding_y = 0.08
+    gap = 0.03
 
-    # Print rows
-    for day in DAYS:
+    for d, day in enumerate(DAYS):
+        for h, hour in enumerate(HOURS):
 
-        print("{:<5}".format(day), end=" ")
+            events = timetable[day][hour]
 
-        for hour in HOURS:
+            if not events:
+                continue
 
-            cell = "\n".join(timetable[day][hour]) if timetable[day][hour] else "-"
+            usable_height = 1 - 2 * padding_y
+            height = (usable_height - gap * (len(events) - 1)) / len(events)
 
-            print("{:^25}".format(cell), end=" ")
+            for i, event_label in enumerate(events):
+                module = event_label.split("\n")[0]
+                color = module_colors.get(module, "lightgrey")
 
-        print("\n")
+                y_position = d + padding_y + i * (height + gap)
+
+                rect = patches.Rectangle(
+                    (h + padding_x, y_position),
+                    1 - 2 * padding_x,
+                    height,
+                    facecolor=color,
+                    edgecolor="black",
+                    linewidth=1
+                )
+
+                ax.add_patch(rect)
+
+                ax.text(
+                    h + 0.5,
+                    y_position + height / 2,
+                    event_label,
+                    ha="center",
+                    va="center",
+                    fontsize=8
+                )
+
+    # Axis formatting
+    ax.set_xticks(range(len(HOURS)))
+    ax.set_xticklabels([f"{h}-{h + 1}" for h in HOURS])
+
+    ax.set_yticks(range(len(DAYS)))
+    ax.set_yticklabels(DAYS)
+
+    ax.set_xlim(0, len(HOURS))
+    ax.set_ylim(0, len(DAYS))
+
+    ax.invert_yaxis()
+
+    ax.set_title("Generated University Timetable")
+
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.tight_layout()
+    plt.show()
 
 
 # Run GA
@@ -754,7 +796,23 @@ best_solution = None
 while best_solution is None:
     best_solution = genetic_algorithm()
 
-format_university_timetable(best_solution, all_events)
+# plot_timetable(random_timetable(), all_events, DAYS, HOURS)
+for idx, slot_index in enumerate(best_solution):
+    event = all_events[idx]
+    module = event["module"]
+    e_type = event["type"]
+    teacher = event["teacher"]
+    # Build group label depending on event type
+    group_info = ""
+
+    if e_type == "tutorial":
+        group_info = f"Tut{event['tutorial_group']}"
+
+    elif e_type == "lecture":
+        group_info = "Lecture"
+
+    event_name = f"{module} | {e_type} | {group_info} | {teacher}"
+    print(f"{event_name:60s} -> {decode_slot(slot_index, event)}")
 
 # ====================== TESTING ======================
 
@@ -774,7 +832,7 @@ print("All timetable tests passed.")
 # analyse the timetable
 # add git.ignore
 # create a testing code to analyse the timetable like it follows all scheduling constraints
-# now assign  lab sessions, personal tutorials
+# now assign  lab sessions-to assign can reduce tutorial groups or lab groups, personal tutorials
 # better the clash preferences that already exist so that it thinks abt all sessions
 # modify sequential constraints to make one tutorial session happen after one lecture session
 # once implemented for all sessions upload on a different branch so that you can later compare your this model (lexicographic) with future models you make better
