@@ -13,12 +13,12 @@ Staff = \
         "COMP2244": ["Massimiliano", "Adri", "Tom", "Haiko", "Alan", "Rob", "Naila"],
         "COMP2579": ["Natasha", "Sarah", "Max", "Andrei", "Gori", "Arshad", "Xeung", "Xi"],
     }
-
+# Bookmark: Understand the group division
 # GLOBAL VARIABLES (Add other global variables here)
 LECTURE_GROUPS = 1
-LAB_GROUPS = 3
-TUTORIAL_GROUPS = 9
-PERSONAL_TUTORIAL_GROUPS = 27
+LAB_GROUPS = 2
+TUTORIAL_GROUPS = 6
+PERSONAL_TUTORIAL_GROUPS = 15
 
 
 def create_groups(module_teachers, all_teachers, n_groups, teacher_load, max_groups):
@@ -66,7 +66,7 @@ for module_code, teachers in Staff.items():
         {
             "Lecture": create_groups(teachers, all_teachers, LECTURE_GROUPS, teacher_load, 1),
             # a teacher will not necessariliy have equal to the max groups limit amount of groups
-            # "Lab session": create_groups(teachers, all_teachers, LAB_GROUPS, teacher_load, 1),
+            "Lab session": create_groups(teachers, all_teachers, LAB_GROUPS, teacher_load, 1),
             "tutorials": create_groups(teachers, all_teachers, TUTORIAL_GROUPS, teacher_load, 2),
             # "Personal Tutorials": create_groups(all_teachers, 27),
         }
@@ -97,25 +97,25 @@ nL_lec = len(lecture_events)
 
 # print(lecture_events)
 
-# # LAB SESSION
-#
-# lab_events = []
-#
-# for module_name, module_data in Modules.items():
-#     for group_name, info in module_data["Lab session"].items():
-#
-#         lab_group = int(group_name.replace("Group", ""))
-#         for session in range(2):  # two sessions per week
-#             lab_events.append({
-#                 "type": "lab",
-#                 "module": module_name,
-#                 "lab_group": lab_group,
-#                 "teacher": info["teacher"]
-#             })
-#
-# nL_lab = len(lab_events)
-#
-# # print(lab_events)
+# LAB SESSION
+
+lab_events = []
+
+for module_name, module_data in Modules.items():
+    for group_name, info in module_data["Lab session"].items():
+
+        lab_group = int(group_name.replace("Group", ""))
+        for session in range(2):  # two sessions per week
+            lab_events.append({
+                "type": "lab",
+                "module": module_name,
+                "lab_group": lab_group,
+                "teacher": info["teacher"]
+            })
+
+nL_lab = len(lab_events)
+
+# print(lab_events)
 
 
 # TUTORIALS
@@ -142,7 +142,7 @@ for module_name, module_data in Modules.items():
 
 nL_tut = len(tutorial_events)
 
-# print(tutorial_events)
+print(tutorial_events)
 # print(nL_tut)
 
 # # PERSONAL TUTORIALS
@@ -183,7 +183,7 @@ all_events = \
     (
             lecture_events
             + tutorial_events
-        # + lab_events
+            + lab_events
         # + per_tut_events
     )
 
@@ -196,7 +196,7 @@ n_events = len(all_events)
 event_duration = {
     "lecture": 2,
     "tutorial": 1,
-    # "lab": 1,
+    "lab": 1,
     # "personal tutorial": 1
 }
 
@@ -258,14 +258,14 @@ for i in range(n_events):
         type_i = event_i["type"]
         type_j = event_j["type"]
 
-        # # RULE 1: Labs vs Labs clashes
-        # if type_i == "lab" and type_j == "lab":
-        #     lab_i = event_i["lab_group"]
-        #     lab_j = event_j["lab_group"]
-        #
-        #     # Same lab group cannot overlap
-        #     if lab_i == lab_j:
-        #         C[i][j] = HARD_PENALTY
+        # RULE 1: Labs vs Labs clashes
+        if type_i == "lab" and type_j == "lab":
+            lab_i = event_i["lab_group"]
+            lab_j = event_j["lab_group"]
+
+            # Same lab group cannot overlap
+            if lab_i == lab_j:
+                C[i][j] = HARD_PENALTY
 
         # RULE 2: Tutorial vs Tutorial clashes
         if type_i == "tutorial" and type_j == "tutorial":
@@ -277,23 +277,23 @@ for i in range(n_events):
             if tut_i == tut_j:
                 C[i][j] = HARD_PENALTY
 
-        # # RULE 3: Tutorial vs Lab clashes
-        # if (type_i == "tutorial" and type_j == "lab") or (type_i == "lab" and type_j == "tutorial"):
-        #
-        #     # Identify tutorial and lab event
-        #     if type_i == "tutorial":
-        #         tut_event = event_i
-        #         lab_event = event_j
-        #     else:
-        #         tut_event = event_j
-        #         lab_event = event_i
-        #
-        #     tut_lab_group = tut_event["lab_group"]
-        #     lab_group = lab_event["lab_group"]
-        #
-        #     # Clash only if same lab group
-        #     if tut_lab_group == lab_group:
-        #         C[i][j] = HARD_PENALTY
+        # RULE 3: Tutorial vs Lab clashes
+        if (type_i == "tutorial" and type_j == "lab") or (type_i == "lab" and type_j == "tutorial"):
+
+            # Identify tutorial and lab event
+            if type_i == "tutorial":
+                tut_event = event_i
+                lab_event = event_j
+            else:
+                tut_event = event_j
+                lab_event = event_i
+
+            tut_lab_group = tut_event["lab_group"]
+            lab_group = lab_event["lab_group"]
+
+            # Clash only if same lab group
+            if tut_lab_group == lab_group:
+                C[i][j] = HARD_PENALTY
 
         # RULE 4: Same teacher cannot teach two events at the same time
         if teacher_i == teacher_j:
@@ -425,7 +425,7 @@ for idx, event in enumerate(all_events):
 SESSION_GAP_RULES = {
     "lecture": (1, SOFT_LARGE),  # 2 day gap between lecture sessions
     "tutorial": (3, SOFT_LARGE),  # 3 day gap between tutorial sessions
-    # "lab": (1, SOFT_LARGE),
+    "lab": (1, SOFT_LARGE),
 }
 
 sessions_by_key = {}
@@ -445,8 +445,8 @@ for idx, event in enumerate(all_events):
     elif e_type == "tutorial":
         key = (module, e_type, event["tutorial_group"])
 
-    # elif e_type == "lab":
-    #     key = (module, e_type, event["lab_group"])
+    elif e_type == "lab":
+        key = (module, e_type, event["lab_group"])
 
     # elif e_type == "personal tutorial":
     #     key = (module, e_type, event["personal_tutorial_group"])
@@ -460,7 +460,7 @@ def fitness(timetable):
     hard_penalty = 0
     tutorial_soft = 0
     lecture_soft = 0
-    # lab_soft = 0
+    lab_soft = 0
     # personal_soft = 0
 
     # Clash
@@ -496,8 +496,8 @@ def fitness(timetable):
         elif e_type == "lecture":
             lecture_soft += total_soft
 
-        # elif e_type == "lab":
-        #     lab_soft += total_soft
+        elif e_type == "lab":
+            lab_soft += total_soft
 
         # elif e_type == "personal tutorial":
         #     personal_soft += total_soft
@@ -549,15 +549,15 @@ def fitness(timetable):
                     elif e_type == "tutorial":
                         tutorial_soft += penalty
 
-                    # elif e_type == "lab":
-                    #     lab_soft += penalty
+                    elif e_type == "lab":
+                        lab_soft += penalty
 
     return \
         (
             hard_penalty,
             lecture_soft,
             tutorial_soft,
-            # lab_soft,
+            lab_soft,
             # personal_soft
         )
 
@@ -810,6 +810,9 @@ for idx, slot_index in enumerate(best_solution):
 
     elif e_type == "lecture":
         group_info = "Lecture"
+
+    if e_type == "lab":
+        group_info = f"Lab{event['lab_group']}"
 
     event_name = f"{module} | {e_type} | {group_info} | {teacher}"
     print(f"{event_name:60s} -> {decode_slot(slot_index, event)}")
