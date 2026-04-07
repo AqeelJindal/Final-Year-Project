@@ -17,7 +17,7 @@ def test_teacher_clash(all_events, timetable, decode_slot):
                 f"{e1} <-> {e2}"
             )
 
-
+# extend this to personal tutorials later on
 def test_group_clash(all_events, timetable, decode_slot):
     """
     Two sessions of the same tutorial group cannot happen at the same time.

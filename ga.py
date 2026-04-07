@@ -1,6 +1,6 @@
 import numpy as np
 import random
-import pandas as pd
+import math
 
 # GLOBAL PROBLEM SETUP
 
@@ -13,12 +13,35 @@ Staff = \
         "COMP2244": ["Massimiliano", "Adri", "Tom", "Haiko", "Alan", "Rob", "Naila"],
         "COMP2579": ["Natasha", "Sarah", "Max", "Andrei", "Gori", "Arshad", "Xeung", "Xi"],
     }
-# Bookmark: Understand the group division
+
 # GLOBAL VARIABLES (Add other global variables here)
+# Lecture->Labs->Tut->PT
+# Talk about the hierarchy
 LECTURE_GROUPS = 1
 LAB_GROUPS = 2
-TUTORIAL_GROUPS = 6
-PERSONAL_TUTORIAL_GROUPS = 15
+TUTORIAL_GROUPS = 5
+PERSONAL_TUTORIAL_GROUPS = 14
+
+
+def validate_group_hierarchy():
+    if LECTURE_GROUPS < 1:
+        raise ValueError("LECTURE_GROUPS must be at least 1.")
+
+    if LAB_GROUPS < LECTURE_GROUPS:
+        raise ValueError(
+            "Invalid hierarchy: LAB_GROUPS must be greater than LECTURE_GROUPS.")
+
+    if TUTORIAL_GROUPS < LAB_GROUPS:
+        raise ValueError(
+            "Invalid hierarchy: TUTORIAL_GROUPS must be greater than LAB_GROUPS.")
+
+    if PERSONAL_TUTORIAL_GROUPS < TUTORIAL_GROUPS:
+        raise ValueError(
+            "Invalid hierarchy: PERSONAL_TUTORIAL_GROUPS must be greater than TUTORIAL_GROUPS."
+        )
+
+
+validate_group_hierarchy()
 
 
 def create_groups(module_teachers, all_teachers, n_groups, teacher_load, max_groups):
@@ -68,7 +91,7 @@ for module_code, teachers in Staff.items():
             # a teacher will not necessariliy have equal to the max groups limit amount of groups
             "Lab session": create_groups(teachers, all_teachers, LAB_GROUPS, teacher_load, 1),
             "tutorials": create_groups(teachers, all_teachers, TUTORIAL_GROUPS, teacher_load, 2),
-            # "Personal Tutorials": create_groups(all_teachers, 27),
+            "Personal Tutorials": create_groups(teachers, all_teachers, PERSONAL_TUTORIAL_GROUPS, teacher_load, 3)
         }
 
 # print(Modules)
@@ -121,7 +144,7 @@ nL_lab = len(lab_events)
 # TUTORIALS
 
 tutorial_events = []
-tutorials_per_lab = TUTORIAL_GROUPS // LAB_GROUPS
+tutorials_per_lab = math.ceil(TUTORIAL_GROUPS / LAB_GROUPS)
 
 for module_name, module_data in Modules.items():
 
@@ -142,42 +165,40 @@ for module_name, module_data in Modules.items():
 
 nL_tut = len(tutorial_events)
 
-print(tutorial_events)
+# print(tutorial_events)
 # print(nL_tut)
+#Bookmark: analyse, check whether groups are right, and there are no empty groups
+# PERSONAL TUTORIALS
 
-# # PERSONAL TUTORIALS
-#
-# per_tut_events = []
-#
-# personal_groups_per_tutorial = 3
-#
-# for module_name, module_data in Modules.items():
-#
-#     n_groups = len(module_data["tutorials"])
-#     tutorials_per_lab = n_groups // n_lab_groups
-#
-#     for group_name, info in module_data["Personal Tutorials"].items():
-#
-#         tutorial_group = int(group_name.replace("Group", ""))
-#
-#         lab_group = (tutorial_group - 1) // tutorials_per_lab + 1
-#
-#         for p in range(1, personal_groups_per_tutorial + 1):
-#
-#             personal_group = (tutorial_group - 1) * personal_groups_per_tutorial + p
-#
-#             per_tut_events.append({
-#                 "type": "personal tutorial",
-#                 "module": module_name,
-#                 "lab_group": lab_group,
-#                 "tutorial_group": tutorial_group,
-#                 "personal_tutorial_group": personal_group,
-#                 "teacher": info["teacher"]
-#             })
-#
-# nL_per_tut = len(per_tut_events)
-# print(per_tut_events)
-#
+per_tut_events = []
+
+personal_groups_per_tutorial = math.ceil(PERSONAL_TUTORIAL_GROUPS / TUTORIAL_GROUPS)
+
+for module_name, module_data in Modules.items():
+
+    for group_name, info in module_data["Personal Tutorials"].items():
+
+        personal_tutorial_group = int(group_name.replace("Group", ""))
+
+        tutorial_group = (personal_tutorial_group - 1) // personal_groups_per_tutorial + 1
+
+        lab_group = (tutorial_group - 1) // tutorials_per_lab + 1
+
+        for session in range(1):  # once per week
+            per_tut_events.append({
+                "type": "personal tutorial",
+                "module": module_name,
+                "lab_group": lab_group,
+                "tutorial_group": tutorial_group,
+                "personal_tutorial_group": personal_tutorial_group,
+                "teacher": info["teacher"]
+            })
+
+nL_per_tut = len(per_tut_events)
+
+print(per_tut_events)
+# print(nL_per_tut)
+
 # UNIFIED EVENT LIST
 all_events = \
     (
@@ -688,19 +709,24 @@ def genetic_algorithm(generations=1001, population_size=50, elite_size=3, mutati
 
 
 # Format timetable neatly
-#Bookmark-understand code
+
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import numpy as np
 
 
 def plot_timetable(best_solution, all_events, DAYS, HOURS):
-    fig, ax = plt.subplots(figsize=(18, 7))
+    fig, ax = plt.subplots(figsize=(22, 10))
 
-    # Store events per slot
+    n_days = len(DAYS)
+    n_hours = len(HOURS)
+
+    # =========================================================
+    # STORE EVENTS BY EXACT CELL
+    # =========================================================
     timetable = {day: {hour: [] for hour in HOURS} for day in DAYS}
 
     for idx, slot in enumerate(best_solution):
-
         event = all_events[idx]
         duration = event_duration[event["type"]]
 
@@ -708,83 +734,148 @@ def plot_timetable(best_solution, all_events, DAYS, HOURS):
         hour_index = slot % len(HOURS)
 
         day = DAYS[day_index]
-
         module = event["module"]
         teacher = event["teacher"]
+        e_type = event["type"]
 
-        if event["type"] == "lecture":
+        if e_type == "lecture":
             label = f"{module}\nLecture\n{teacher}"
-        else:
-            label = f"{module}\nTut{event['tutorial_group']}\n{teacher}"
+        elif e_type == "tutorial":
+            label = f"{module}\nTutorial {event['tutorial_group']}\nLab Group {event['lab_group']}\n{teacher}"
+        elif e_type == "lab":
+            label = f"{module}\nLab {event['lab_group']}\n{teacher}"
+        else:  # for PT
+            label = f"{module}\n{e_type}\n{teacher}"
 
-        # Fill slots for duration
         for h in range(duration):
-            timetable[day][HOURS[hour_index + h]].append(label)
+            timetable[day][HOURS[hour_index + h]].append({
+                "module": module,
+                "label": label
+            })
 
-    # Module colours
+    # =========================================================
+    # COLOURS
+    # =========================================================
     module_colors = {
         "COMP2399": "#8dd3c7",
         "COMP2244": "#bebada",
         "COMP2579": "#fb8072"
     }
 
-    # Spacing parameters
-    padding_x = 0.05
-    padding_y = 0.08
-    gap = 0.03
+    # =========================================================
+    # DRAW GRID
+    # =========================================================
+    ax.set_xlim(0, n_hours)
+    ax.set_ylim(0, n_days)
+    ax.invert_yaxis()
+
+    for x in range(n_hours + 1):
+        ax.axvline(x, color="black", linewidth=1)
+
+    for y in range(n_days + 1):
+        ax.axhline(y, color="black", linewidth=1)
+
+    # =========================================================
+    # DRAW EVENT BOXES ONLY
+    # =========================================================
+    margin_x = 0.04
+    margin_y = 0.04
+    internal_gap = 0.03
+
+    # Store rectangles and their labels for hover
+    rect_info = []
 
     for d, day in enumerate(DAYS):
         for h, hour in enumerate(HOURS):
-
             events = timetable[day][hour]
 
             if not events:
                 continue
 
-            usable_height = 1 - 2 * padding_y
-            height = (usable_height - gap * (len(events) - 1)) / len(events)
+            n_events_cell = len(events)
+            usable_width = 1 - 2 * margin_x
+            usable_height = 1 - 2 * margin_y
 
-            for i, event_label in enumerate(events):
-                module = event_label.split("\n")[0]
-                color = module_colors.get(module, "lightgrey")
+            total_gap = internal_gap * (n_events_cell - 1)
+            box_height = (usable_height - total_gap) / n_events_cell
 
-                y_position = d + padding_y + i * (height + gap)
+            for i, ev in enumerate(events):
+                x0 = h + margin_x
+                y0 = d + margin_y + i * (box_height + internal_gap)
+
+                color = module_colors.get(ev["module"], "lightgrey")
 
                 rect = patches.Rectangle(
-                    (h + padding_x, y_position),
-                    1 - 2 * padding_x,
-                    height,
+                    (x0, y0),
+                    usable_width,
+                    box_height,
                     facecolor=color,
                     edgecolor="black",
-                    linewidth=1
+                    linewidth=0.8
                 )
-
                 ax.add_patch(rect)
 
-                ax.text(
-                    h + 0.5,
-                    y_position + height / 2,
-                    event_label,
-                    ha="center",
-                    va="center",
-                    fontsize=8
-                )
+                rect_info.append({
+                    "rect": rect,
+                    "label": ev["label"]
+                })
 
-    # Axis formatting
-    ax.set_xticks(range(len(HOURS)))
-    ax.set_xticklabels([f"{h}-{h + 1}" for h in HOURS])
+    # =========================================================
+    # HOVER ANNOTATION
+    # =========================================================
+    annot = ax.annotate(
+        "",
+        xy=(0, 0),
+        xytext=(15, 15),
+        textcoords="offset points",
+        bbox=dict(boxstyle="round,pad=0.4", fc="white", ec="black", lw=1),
+        arrowprops=dict(arrowstyle="->"),
+        fontsize=10
+    )
+    annot.set_visible(False)
 
-    ax.set_yticks(range(len(DAYS)))
-    ax.set_yticklabels(DAYS)
+    def update_annot(rect, label, event):
+        annot.xy = (event.xdata, event.ydata)
+        annot.set_text(label)
+        annot.set_visible(True)
 
-    ax.set_xlim(0, len(HOURS))
-    ax.set_ylim(0, len(DAYS))
+    def hover(event):
+        if event.inaxes != ax:
+            if annot.get_visible():
+                annot.set_visible(False)
+                fig.canvas.draw_idle()
+            return
 
-    ax.invert_yaxis()
+        for info in rect_info:
+            rect = info["rect"]
+            contains, _ = rect.contains(event)
 
-    ax.set_title("Generated University Timetable")
+            if contains:
+                update_annot(rect, info["label"], event)
+                fig.canvas.draw_idle()
+                return
 
-    plt.grid(True, linestyle="--", alpha=0.4)
+        if annot.get_visible():
+            annot.set_visible(False)
+            fig.canvas.draw_idle()
+
+    fig.canvas.mpl_connect("motion_notify_event", hover)
+
+    # =========================================================
+    # AXIS LABELS
+    # =========================================================
+    ax.set_xticks(np.arange(n_hours) + 0.5)
+    ax.set_xticklabels([f"{h}:00-{h + 1}:00" for h in HOURS], fontsize=10)
+
+    ax.set_yticks(np.arange(n_days) + 0.5)
+    ax.set_yticklabels(DAYS, fontsize=11)
+
+    ax.tick_params(length=0)
+    ax.set_title("University Timetable", fontsize=16, pad=15)
+
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
     plt.tight_layout()
     plt.show()
 
@@ -796,22 +887,23 @@ best_solution = None
 while best_solution is None:
     best_solution = genetic_algorithm()
 
-# plot_timetable(random_timetable(), all_events, DAYS, HOURS)
+plot_timetable(best_solution, all_events, DAYS, HOURS)
+
 for idx, slot_index in enumerate(best_solution):
     event = all_events[idx]
     module = event["module"]
     e_type = event["type"]
     teacher = event["teacher"]
+
     # Build group label depending on event type
     group_info = ""
-
     if e_type == "tutorial":
         group_info = f"Tut{event['tutorial_group']}"
 
     elif e_type == "lecture":
         group_info = "Lecture"
 
-    if e_type == "lab":
+    elif e_type == "lab":
         group_info = f"Lab{event['lab_group']}"
 
     event_name = f"{module} | {e_type} | {group_info} | {teacher}"
@@ -831,11 +923,10 @@ test_session_clash(all_events, best_solution, decode_slot)
 print("All timetable tests passed.")
 
 # Bookmark:
-# modify ga-analyse tt, format tt nicely-use the function created
-# analyse the timetable
+# now assign personal tutorials
+# modify ga
 # add git.ignore
 # create a testing code to analyse the timetable like it follows all scheduling constraints
-# now assign  lab sessions-to assign can reduce tutorial groups or lab groups, personal tutorials
 # better the clash preferences that already exist so that it thinks abt all sessions
 # modify sequential constraints to make one tutorial session happen after one lecture session
 # once implemented for all sessions upload on a different branch so that you can later compare your this model (lexicographic) with future models you make better
