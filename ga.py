@@ -22,6 +22,8 @@ LAB_GROUPS = 2
 TUTORIAL_GROUPS = 5
 PERSONAL_TUTORIAL_GROUPS = 14
 
+PERSONAL_TUTORIAL_MODULE = "COMP2399"  # a dummy module, to create one set of PT's
+
 
 def validate_group_hierarchy():
     if LECTURE_GROUPS < 1:
@@ -91,8 +93,14 @@ for module_code, teachers in Staff.items():
             # a teacher will not necessariliy have equal to the max groups limit amount of groups
             "Lab session": create_groups(teachers, all_teachers, LAB_GROUPS, teacher_load, 1),
             "tutorials": create_groups(teachers, all_teachers, TUTORIAL_GROUPS, teacher_load, 2),
-            "Personal Tutorials": create_groups(teachers, all_teachers, PERSONAL_TUTORIAL_GROUPS, teacher_load, 3)
         }
+
+    if module_code == PERSONAL_TUTORIAL_MODULE:
+        Modules[module_code]["Personal Tutorials"] = create_groups(
+            teachers, all_teachers, PERSONAL_TUTORIAL_GROUPS, teacher_load, 1
+        )
+    else:
+        Modules[module_code]["Personal Tutorials"] = {}
 
 # print(Modules)
 # print(teacher_load)
@@ -144,7 +152,6 @@ nL_lab = len(lab_events)
 # TUTORIALS
 
 tutorial_events = []
-tutorials_per_lab = math.ceil(TUTORIAL_GROUPS / LAB_GROUPS)
 
 for module_name, module_data in Modules.items():
 
@@ -152,7 +159,7 @@ for module_name, module_data in Modules.items():
 
         tutorial_group = int(group_name.replace("Group", ""))
 
-        lab_group = (tutorial_group - 1) // tutorials_per_lab + 1
+        lab_group = ((tutorial_group - 1) * LAB_GROUPS) // TUTORIAL_GROUPS + 1
 
         for session in range(2):  # two sessions per week
             tutorial_events.append({
@@ -167,12 +174,10 @@ nL_tut = len(tutorial_events)
 
 # print(tutorial_events)
 # print(nL_tut)
-#Bookmark: analyse, check whether groups are right, and there are no empty groups
+
 # PERSONAL TUTORIALS
 
 per_tut_events = []
-
-personal_groups_per_tutorial = math.ceil(PERSONAL_TUTORIAL_GROUPS / TUTORIAL_GROUPS)
 
 for module_name, module_data in Modules.items():
 
@@ -180,14 +185,14 @@ for module_name, module_data in Modules.items():
 
         personal_tutorial_group = int(group_name.replace("Group", ""))
 
-        tutorial_group = (personal_tutorial_group - 1) // personal_groups_per_tutorial + 1
+        tutorial_group = ((personal_tutorial_group - 1) * TUTORIAL_GROUPS) // PERSONAL_TUTORIAL_GROUPS + 1
 
-        lab_group = (tutorial_group - 1) // tutorials_per_lab + 1
+        lab_group = ((tutorial_group - 1) * LAB_GROUPS) // TUTORIAL_GROUPS + 1
 
         for session in range(1):  # once per week
             per_tut_events.append({
                 "type": "personal tutorial",
-                "module": module_name,
+                "module": module_name,  # dummy module
                 "lab_group": lab_group,
                 "tutorial_group": tutorial_group,
                 "personal_tutorial_group": personal_tutorial_group,
@@ -196,7 +201,7 @@ for module_name, module_data in Modules.items():
 
 nL_per_tut = len(per_tut_events)
 
-print(per_tut_events)
+# print(per_tut_events)
 # print(nL_per_tut)
 
 # UNIFIED EVENT LIST
@@ -205,7 +210,7 @@ all_events = \
             lecture_events
             + tutorial_events
             + lab_events
-        # + per_tut_events
+            + per_tut_events
     )
 
 n_events = len(all_events)
@@ -218,7 +223,7 @@ event_duration = {
     "lecture": 2,
     "tutorial": 1,
     "lab": 1,
-    # "personal tutorial": 1
+    "personal tutorial": 1
 }
 
 DAYS = ["MON", "TUE", "WED", "THU", "FRI"]
@@ -316,11 +321,47 @@ for i in range(n_events):
             if tut_lab_group == lab_group:
                 C[i][j] = HARD_PENALTY
 
-        # RULE 4: Same teacher cannot teach two events at the same time
+        # RULE 4: Personal Tutorial vs Lab clashes
+        if (type_i == "personal tutorial" and type_j == "lab") or (type_i == "lab" and type_j == "personal tutorial"):
+
+            # Identify personal tutorial and lab event
+            if type_i == "personal tutorial":
+                per_tut_event = event_i
+                lab_event = event_j
+            else:
+                per_tut_event = event_j
+                lab_event = event_i
+
+            per_tut_lab_group = per_tut_event["lab_group"]
+            lab_group = lab_event["lab_group"]
+
+            # Clash only if same lab group
+            if per_tut_lab_group == lab_group:
+                C[i][j] = HARD_PENALTY
+
+        # RULE 5: Personal Tutorial vs Tutorial clashes
+        if (type_i == "personal tutorial" and type_j == "tutorial") or (type_i == "tutorial" and type_j == "personal tutorial"):
+
+            # Identify personal tutorial and tutorial event
+            if type_i == "personal tutorial":
+                per_tut_event = event_i
+                tut_event = event_j
+            else:
+                per_tut_event = event_j
+                tut_event = event_i
+
+            per_tut_tut_group = per_tut_event["tutorial_group"]
+            tut_group = tut_event["tutorial_group"]
+
+            # Clash only if same tutorial group
+            if per_tut_tut_group == tut_group:
+                C[i][j] = HARD_PENALTY
+
+        # RULE 6: Same teacher cannot teach two events at the same time
         if teacher_i == teacher_j:
             C[i][j] = HARD_PENALTY
 
-        # RULE 5: Lectures clash with everything
+        # RULE 7: Lectures clash with everything
         if type_i == "lecture" or type_j == "lecture":
             C[i][j] = HARD_PENALTY
 
@@ -469,9 +510,6 @@ for idx, event in enumerate(all_events):
     elif e_type == "lab":
         key = (module, e_type, event["lab_group"])
 
-    # elif e_type == "personal tutorial":
-    #     key = (module, e_type, event["personal_tutorial_group"])
-
     sessions_by_key.setdefault(key, []).append(idx)
 
 
@@ -482,7 +520,7 @@ def fitness(timetable):
     tutorial_soft = 0
     lecture_soft = 0
     lab_soft = 0
-    # personal_soft = 0
+    personal_soft = 0
 
     # Clash
     for i in range(n_events):
@@ -520,8 +558,8 @@ def fitness(timetable):
         elif e_type == "lab":
             lab_soft += total_soft
 
-        # elif e_type == "personal tutorial":
-        #     personal_soft += total_soft
+        elif e_type == "personal tutorial":
+            personal_soft += total_soft
 
     # Sequential Constraints-modify it later
     for (earlier_type, later_type), penalty in SEQUENTIAL_RULES.items():
@@ -579,7 +617,7 @@ def fitness(timetable):
             lecture_soft,
             tutorial_soft,
             lab_soft,
-            # personal_soft
+            personal_soft
         )
 
 
@@ -744,8 +782,8 @@ def plot_timetable(best_solution, all_events, DAYS, HOURS):
             label = f"{module}\nTutorial {event['tutorial_group']}\nLab Group {event['lab_group']}\n{teacher}"
         elif e_type == "lab":
             label = f"{module}\nLab {event['lab_group']}\n{teacher}"
-        else:  # for PT
-            label = f"{module}\n{e_type}\n{teacher}"
+        elif e_type == "personal tutorial":
+            label = f"PT {event['personal_tutorial_group']}\n{teacher}"
 
         for h in range(duration):
             timetable[day][HOURS[hour_index + h]].append({
@@ -906,6 +944,9 @@ for idx, slot_index in enumerate(best_solution):
     elif e_type == "lab":
         group_info = f"Lab{event['lab_group']}"
 
+    elif e_type == "personal tutorial":
+        group_info = f"PT{event['personal_tutorial_group']}"
+
     event_name = f"{module} | {e_type} | {group_info} | {teacher}"
     print(f"{event_name:60s} -> {decode_slot(slot_index, event)}")
 
@@ -923,7 +964,7 @@ test_session_clash(all_events, best_solution, decode_slot)
 print("All timetable tests passed.")
 
 # Bookmark:
-# now assign personal tutorials
+# now assign personal tutorials-write test cases, analyse tt
 # modify ga
 # add git.ignore
 # create a testing code to analyse the timetable like it follows all scheduling constraints
