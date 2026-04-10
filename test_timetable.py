@@ -17,7 +17,7 @@ def test_teacher_clash(all_events, timetable, decode_slot):
                 f"{e1} <-> {e2}"
             )
 
-# extend this to personal tutorials later on
+
 def test_group_clash(all_events, timetable, decode_slot):
     """
     Two sessions of the same tutorial group cannot happen at the same time.
@@ -60,78 +60,112 @@ def test_group_clash(all_events, timetable, decode_slot):
                 )
 
 
-# Extend this test case to personal tutorials later on
-def test_teacher_group_limit(all_events):
+def test_teacher_group_limit(
+    all_events,
+    max_lecture_groups=1,
+    max_lab_groups=1,
+    max_tutorial_groups=2,
+    max_personal_tutorial_groups=1,
+    max_groups_overall=2
+):
     """
-    Each teacher must teach at most:
-    - 2 tutorial groups per module
-    - 1 lab groups per module
-    - lectures for at most 1 module
+    Check that each teacher respects:
+
+    - lecture group limit
+    - lab group limit
+    - tutorial group limit
+    - personal tutorial group limit
+    - overall unique group limit
     """
 
-    tutorial_groups = {}
-    lab_groups = {}
-    lecture_modules = {}
+    teacher_groups = {}
+    teacher_type_groups = {}
 
     for event in all_events:
-
         teacher = event["teacher"]
         event_type = event["type"]
         module = event["module"]
 
-        # ---- Tutorials ----
-        if event_type == "tutorial":
-            group = event["tutorial_group"]
+        if teacher not in teacher_groups:
+            teacher_groups[teacher] = set()
 
-            if teacher not in tutorial_groups:
-                tutorial_groups[teacher] = set()
+        if teacher not in teacher_type_groups:
+            teacher_type_groups[teacher] = {
+                "lecture": set(),
+                "lab": set(),
+                "tutorial": set(),
+                "personal tutorial": set()
+            }
 
-            tutorial_groups[teacher].add((module, group))
+        if event_type == "lecture":
+            group_key = ("lecture", module)
 
-        # ---- Labs ----
         elif event_type == "lab":
-            group = event["lab_group"]
+            group_key = ("lab", module, event["lab_group"])
 
-            if teacher not in lab_groups:
-                lab_groups[teacher] = set()
+        elif event_type == "tutorial":
+            group_key = ("tutorial", module, event["tutorial_group"])
 
-            lab_groups[teacher].add((module, group))
+        elif event_type == "personal tutorial":
+            group_key = ("personal tutorial", module, event["personal_tutorial_group"])
 
-        # ---- Lectures ----
-        elif event_type == "lecture":
+        else:
+            raise ValueError(f"Unknown event type: {event_type}")
 
-            if teacher not in lecture_modules:
-                lecture_modules[teacher] = set()
+        # overall unique groups
+        teacher_groups[teacher].add(group_key)
 
-            lecture_modules[teacher].add(module)
+        # per-type unique groups
+        teacher_type_groups[teacher][event_type].add(group_key)
 
-    for teacher, groups in tutorial_groups.items():
-        assert len(groups) <= 2, (
-            f"Teacher {teacher} assigned to {len(groups)} tutorial groups: {groups}"
+    for teacher, groups in teacher_groups.items():
+        lecture_count = len(teacher_type_groups[teacher]["lecture"])
+        lab_count = len(teacher_type_groups[teacher]["lab"])
+        tutorial_count = len(teacher_type_groups[teacher]["tutorial"])
+        personal_tutorial_count = len(teacher_type_groups[teacher]["personal tutorial"])
+        overall_count = len(groups)
+
+        assert lecture_count <= max_lecture_groups, (
+            f"Teacher {teacher} assigned to {lecture_count} lecture groups "
+            f"instead of at most {max_lecture_groups}: "
+            f"{teacher_type_groups[teacher]['lecture']}"
         )
 
-    for teacher, groups in lab_groups.items():
-        assert len(groups) <= 1, (
-            f"Teacher {teacher} assigned to {len(groups)} lab groups: {groups}"
+        assert lab_count <= max_lab_groups, (
+            f"Teacher {teacher} assigned to {lab_count} lab groups "
+            f"instead of at most {max_lab_groups}: "
+            f"{teacher_type_groups[teacher]['lab']}"
         )
 
-    for teacher, modules in lecture_modules.items():
-        assert len(modules) <= 1, (
-            f"Teacher {teacher} assigned to lectures for multiple modules: {modules}"
+        assert tutorial_count <= max_tutorial_groups, (
+            f"Teacher {teacher} assigned to {tutorial_count} tutorial groups "
+            f"instead of at most {max_tutorial_groups}: "
+            f"{teacher_type_groups[teacher]['tutorial']}"
         )
 
-# later extend to personal tutorials
+        assert personal_tutorial_count <= max_personal_tutorial_groups, (
+            f"Teacher {teacher} assigned to {personal_tutorial_count} personal tutorial groups "
+            f"instead of at most {max_personal_tutorial_groups}: "
+            f"{teacher_type_groups[teacher]['personal tutorial']}"
+        )
+
+        assert overall_count <= max_groups_overall, (
+            f"Teacher {teacher} assigned to {overall_count} unique groups overall "
+            f"instead of at most {max_groups_overall}: {groups}"
+        )
+
+
 def test_two_sessions_per_group(all_events):
     """
     Each tutorial group must have exactly 2 sessions per week.
-    Each module must also have exactly 2 lecture sessions per week.
+    Each module must have exactly 2 lecture sessions per week.
     Each lab group must have exactly 2 sessions per week.
+    Each personal tutorial group must have exactly 1 session per week.
     """
 
     group_sessions = {}
 
     for event in all_events:
-
         module = event["module"]
         e_type = event["type"]
 
@@ -144,6 +178,9 @@ def test_two_sessions_per_group(all_events):
         elif e_type == "lab":
             group = event["lab_group"]
 
+        elif e_type == "personal tutorial":
+            group = event["personal_tutorial_group"]
+
         else:
             continue
 
@@ -155,8 +192,10 @@ def test_two_sessions_per_group(all_events):
         group_sessions[key] += 1
 
     for (module, e_type, group), count in group_sessions.items():
-        assert count == 2, (
-            f"{module} {e_type} group {group} has {count} sessions instead of 2"
+        expected_count = 1 if e_type == "personal tutorial" else 2
+
+        assert count == expected_count, (
+            f"{module} {e_type} group {group} has {count} sessions instead of {expected_count}"
         )
 
 
@@ -180,15 +219,14 @@ def test_sessions_within_working_hours(all_events, timetable, event_duration, HO
         )
 
 
-# extend later for personal tutorials
 def test_session_clash(all_events, timetable, decode_slot):
     """
     Session clash rules:
 
     1. Lectures cannot clash with any other session.
-    2. Tutorials of the same group cannot clash.
-    3. Labs of the same group cannot clash.
-    4. Tutorials under the same lab group cannot clash with Lab and vice versa
+    2. Tutorials under the same lab group cannot clash with labs and vice versa.
+    3. Personal tutorials cannot clash with tutorials of the same tutorial group.
+    4. Personal tutorials cannot clash with labs of the same lab group.
     """
 
     n_events = len(all_events)
@@ -209,41 +247,66 @@ def test_session_clash(all_events, timetable, decode_slot):
                     f"{e1} <-> {e2}"
                 )
 
-            # Rule 2: tutorial group clash
-            if e1["type"] == "tutorial" and e2["type"] == "tutorial":
-                same_group = e1["tutorial_group"] == e2["tutorial_group"]
-
-                assert not (same_group), (
-                    f"Tutorial group clash at {decode_slot(timetable[i], e1)}: "
-                    f"{e1} <-> {e2}"
-                )
-
-            # Rule 3: lab group clash
-            if e1["type"] == "lab" and e2["type"] == "lab":
-                same_group = e1["lab_group"] == e2["lab_group"]
-
-                assert not (same_group), (
-                    f"Lab group clash at {decode_slot(timetable[i], e1)}: "
-                    f"{e1} <-> {e2}"
-                )
-
-            # Rule 4: lab vs tutorial clash
-            if (e1["type"] == "lab" and e2["type"] == "tutorial") or (e1["type"] == "tutorial" and e2["type"] == "lab"):
+            # Rule 2: lab vs tutorial clash
+            if (e1["type"] == "lab" and e2["type"] == "tutorial") or (
+                e1["type"] == "tutorial" and e2["type"] == "lab"
+            ):
 
                 if e1["type"] == "lab":
-                    tut_event = e2
                     lab_event = e1
+                    tut_event = e2
                 else:
-                    tut_event = e1
                     lab_event = e2
+                    tut_event = e1
 
-                tut_lab_group = tut_event["lab_group"]
-                lab_group = lab_event["lab_group"]
+                same_group = (
+                    lab_event["lab_group"] == tut_event["lab_group"]
+                )
 
-                same_group = tut_lab_group == lab_group
+                assert not same_group, (
+                    f"Lab and tutorial group clash at {decode_slot(timetable[i], e1)}: "
+                    f"{e1} <-> {e2}"
+                )
 
-                assert not (same_group), (
-                    f"Lab and Tut group clash at {decode_slot(timetable[i], e1)}: "
+            # Rule 3: personal tutorial vs tutorial clash
+            if (e1["type"] == "personal tutorial" and e2["type"] == "tutorial") or (
+                e1["type"] == "tutorial" and e2["type"] == "personal tutorial"
+            ):
+
+                if e1["type"] == "personal tutorial":
+                    pt_event = e1
+                    tut_event = e2
+                else:
+                    pt_event = e2
+                    tut_event = e1
+
+                same_group = (
+                    pt_event["tutorial_group"] == tut_event["tutorial_group"]
+                )
+
+                assert not same_group, (
+                    f"Personal tutorial and tutorial clash at {decode_slot(timetable[i], e1)}: "
+                    f"{e1} <-> {e2}"
+                )
+
+            # Rule 4: personal tutorial vs lab clash
+            if (e1["type"] == "personal tutorial" and e2["type"] == "lab") or (
+                e1["type"] == "lab" and e2["type"] == "personal tutorial"
+            ):
+
+                if e1["type"] == "personal tutorial":
+                    pt_event = e1
+                    lab_event = e2
+                else:
+                    pt_event = e2
+                    lab_event = e1
+
+                same_group = (
+                    pt_event["lab_group"] == lab_event["lab_group"]
+                )
+
+                assert not same_group, (
+                    f"Personal tutorial and lab clash at {decode_slot(timetable[i], e1)}: "
                     f"{e1} <-> {e2}"
                 )
 

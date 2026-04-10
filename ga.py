@@ -1,6 +1,5 @@
 import numpy as np
 import random
-import math
 
 # GLOBAL PROBLEM SETUP
 
@@ -46,29 +45,47 @@ def validate_group_hierarchy():
 validate_group_hierarchy()
 
 
-def create_groups(module_teachers, all_teachers, n_groups, teacher_load, max_groups):
+def create_groups(module_teachers, all_teachers, n_groups, type_teacher_load, max_groups_per_type, overall_teacher_load,
+                  max_groups_overall, forced_teacher=None):
     groups = {}
-
     group_id = 1
 
-    # Assign module teachers first
+    def can_assign(teacher):
+        return (
+                type_teacher_load[teacher] < max_groups_per_type
+                and overall_teacher_load[teacher] < max_groups_overall
+        )
+
+    def assign_teacher(teacher, group_id):
+        groups[f"Group{group_id}"] = {"teacher": teacher}
+        type_teacher_load[teacher] += 1
+        overall_teacher_load[teacher] += 1
+
+    # force specific teacher into Group1 first
+    if forced_teacher is not None:
+        if not can_assign(forced_teacher):
+            raise ValueError(
+                f"Forced teacher {forced_teacher} has no remaining capacity."
+            )
+
+        assign_teacher(forced_teacher, group_id)
+        group_id += 1
+
+    # assign module teachers first
     for teacher in module_teachers:
-        while teacher_load[teacher] < max_groups and group_id <= n_groups:
-            groups[f"Group{group_id}"] = {"teacher": teacher}
-            teacher_load[teacher] += 1
+        while can_assign(teacher) and group_id <= n_groups:
+            assign_teacher(teacher, group_id)
             group_id += 1
 
-    # If groups remain, use other teachers
+    # if groups remain, use other teachers
     if group_id <= n_groups:
         other_teachers = [t for t in all_teachers if t not in module_teachers]
 
         for teacher in other_teachers:
-            while teacher_load[teacher] < max_groups and group_id <= n_groups:
-                groups[f"Group{group_id}"] = {"teacher": teacher}
-                teacher_load[teacher] += 1
+            while can_assign(teacher) and group_id <= n_groups:
+                assign_teacher(teacher, group_id)
                 group_id += 1
 
-    # Check if enough teachers were available
     if group_id <= n_groups:
         raise ValueError("Not enough teacher capacity to cover all groups.")
 
@@ -80,30 +97,74 @@ all_teachers = []
 for teacher_list in Staff.values():
     all_teachers.extend(teacher_list)
 
+all_teachers = list(dict.fromkeys(all_teachers))  # remove duplicates safely
+
 #  loads for each teacher, to limit the amount of groups a teacher can have
-#  each teacher will have at most the highest number in max group parameter while creating modules
-teacher_load = {t: 0 for t in all_teachers}
+lecture_teacher_load = {t: 0 for t in all_teachers}
+lab_teacher_load = {t: 0 for t in all_teachers}
+tutorial_teacher_load = {t: 0 for t in all_teachers}
+personal_tutorial_teacher_load = {t: 0 for t in all_teachers}
+
+# overall load across all group assignments
+overall_teacher_load = {t: 0 for t in all_teachers}
+
+MAX_GROUPS_OVERALL = 2  # overall teacher limit
 
 Modules = {}
 
 for module_code, teachers in Staff.items():
-    Modules[module_code] = \
-        {
-            "Lecture": create_groups(teachers, all_teachers, LECTURE_GROUPS, teacher_load, 1),
-            # a teacher will not necessariliy have equal to the max groups limit amount of groups
-            "Lab session": create_groups(teachers, all_teachers, LAB_GROUPS, teacher_load, 1),
-            "tutorials": create_groups(teachers, all_teachers, TUTORIAL_GROUPS, teacher_load, 2),
-        }
+    lecturer = teachers[0]
+
+    Modules[module_code] = {
+        "Lecture": create_groups(
+            teachers,
+            all_teachers,
+            LECTURE_GROUPS,
+            lecture_teacher_load,
+            1,
+            overall_teacher_load,
+            MAX_GROUPS_OVERALL,
+            forced_teacher=lecturer
+        ),
+        "Lab session": create_groups(
+            teachers,
+            all_teachers,
+            LAB_GROUPS,
+            lab_teacher_load,
+            1,
+            overall_teacher_load,
+            MAX_GROUPS_OVERALL
+        ),
+        "tutorials": create_groups(
+            teachers,
+            all_teachers,
+            TUTORIAL_GROUPS,
+            tutorial_teacher_load,
+            2,
+            overall_teacher_load,
+            MAX_GROUPS_OVERALL
+        ),
+    }
 
     if module_code == PERSONAL_TUTORIAL_MODULE:
         Modules[module_code]["Personal Tutorials"] = create_groups(
-            teachers, all_teachers, PERSONAL_TUTORIAL_GROUPS, teacher_load, 1
+            teachers,
+            all_teachers,
+            PERSONAL_TUTORIAL_GROUPS,
+            personal_tutorial_teacher_load,
+            1,
+            overall_teacher_load,
+            MAX_GROUPS_OVERALL
         )
     else:
         Modules[module_code]["Personal Tutorials"] = {}
 
 # print(Modules)
-# print(teacher_load)
+# print(lecture_teacher_load)
+# print(lab_teacher_load)
+# print(tutorial_teacher_load)
+# print(personal_tutorial_teacher_load)
+# print(overall_teacher_load)
 
 # GLOBAL CONSTRAINTS
 HARD_PENALTY = 10 ** 6
@@ -340,7 +401,8 @@ for i in range(n_events):
                 C[i][j] = HARD_PENALTY
 
         # RULE 5: Personal Tutorial vs Tutorial clashes
-        if (type_i == "personal tutorial" and type_j == "tutorial") or (type_i == "tutorial" and type_j == "personal tutorial"):
+        if (type_i == "personal tutorial" and type_j == "tutorial") or (
+                type_i == "tutorial" and type_j == "personal tutorial"):
 
             # Identify personal tutorial and tutorial event
             if type_i == "personal tutorial":
@@ -485,9 +547,9 @@ for idx, event in enumerate(all_events):
 # for breaks constraints
 
 SESSION_GAP_RULES = {
-    "lecture": (1, SOFT_LARGE),  # 2 day gap between lecture sessions
-    "tutorial": (3, SOFT_LARGE),  # 3 day gap between tutorial sessions
-    "lab": (1, SOFT_LARGE),
+    "lecture": (1, HARD_PENALTY),  # 1 day gap between lecture sessions
+    "tutorial": (3, HARD_PENALTY),  # 3 day gap between tutorial sessions
+    "lab": (1, HARD_PENALTY),
 }
 
 sessions_by_key = {}
@@ -601,15 +663,7 @@ def fitness(timetable):
                 gap = abs(day_i - day_j)
 
                 if gap < min_gap:
-
-                    if e_type == "lecture":
-                        lecture_soft += penalty
-
-                    elif e_type == "tutorial":
-                        tutorial_soft += penalty
-
-                    elif e_type == "lab":
-                        lab_soft += penalty
+                    hard_penalty += penalty
 
     return \
         (
@@ -783,7 +837,7 @@ def plot_timetable(best_solution, all_events, DAYS, HOURS):
         elif e_type == "lab":
             label = f"{module}\nLab {event['lab_group']}\n{teacher}"
         elif e_type == "personal tutorial":
-            label = f"PT {event['personal_tutorial_group']}\n{teacher}"
+            label = f"Personal Tutorial {event['personal_tutorial_group']}\nTutorial Group {event['tutorial_group']}\nLab Group {event['lab_group']}\n{teacher}"
 
         for h in range(duration):
             timetable[day][HOURS[hour_index + h]].append({
@@ -964,7 +1018,8 @@ test_session_clash(all_events, best_solution, decode_slot)
 print("All timetable tests passed.")
 
 # Bookmark:
-# now assign personal tutorials-write test cases, analyse tt
+# add breaks between same session type and group-make it hard constrained
+# format tt nicely-with legends and different colours for each session type
 # modify ga
 # add git.ignore
 # create a testing code to analyse the timetable like it follows all scheduling constraints
@@ -972,3 +1027,4 @@ print("All timetable tests passed.")
 # modify sequential constraints to make one tutorial session happen after one lecture session
 # once implemented for all sessions upload on a different branch so that you can later compare your this model (lexicographic) with future models you make better
 # add breaks between sessions too in hours/days
+# remove extra info like lab groups or tutorial groups for other session from the popup
