@@ -22,7 +22,7 @@ TUTORIAL_GROUPS = 5
 PERSONAL_TUTORIAL_GROUPS = 14
 
 PERSONAL_TUTORIAL_MODULE = "COMP2399"  # a dummy module, to create one set of PT's
-
+NOT_LAB_MODULE = "COMP2579"
 
 def validate_group_hierarchy():
     if LECTURE_GROUPS < 1:
@@ -115,8 +115,9 @@ Modules = {}
 for module_code, teachers in Staff.items():
     lecturer = teachers[0]
 
-    Modules[module_code] = {
-        "Lecture": create_groups(
+    Modules[module_code] = {}
+
+    Modules[module_code]["Lecture"] = create_groups(
             teachers,
             all_teachers,
             LECTURE_GROUPS,
@@ -125,8 +126,12 @@ for module_code, teachers in Staff.items():
             overall_teacher_load,
             MAX_GROUPS_OVERALL,
             forced_teacher=lecturer
-        ),
-        "Lab session": create_groups(
+        )
+
+    if module_code == NOT_LAB_MODULE:
+        Modules[module_code]["Lab session"] = {}
+    else:
+        Modules[module_code]["Lab session"] = create_groups(
             teachers,
             all_teachers,
             LAB_GROUPS,
@@ -134,8 +139,9 @@ for module_code, teachers in Staff.items():
             1,
             overall_teacher_load,
             MAX_GROUPS_OVERALL
-        ),
-        "tutorials": create_groups(
+        )
+
+    Modules[module_code]["tutorials"] = create_groups(
             teachers,
             all_teachers,
             TUTORIAL_GROUPS,
@@ -143,8 +149,7 @@ for module_code, teachers in Staff.items():
             2,
             overall_teacher_load,
             MAX_GROUPS_OVERALL
-        ),
-    }
+        )
 
     if module_code == PERSONAL_TUTORIAL_MODULE:
         Modules[module_code]["Personal Tutorials"] = create_groups(
@@ -548,7 +553,7 @@ for idx, event in enumerate(all_events):
 
 SESSION_GAP_RULES = {
     "lecture": (1, HARD_PENALTY),  # 1 day gap between lecture sessions
-    "tutorial": (3, HARD_PENALTY),  # 3 day gap between tutorial sessions
+    "tutorial": (2, HARD_PENALTY),  # 2 day gap between tutorial sessions
     "lab": (1, HARD_PENALTY),
 }
 
@@ -1018,9 +1023,8 @@ test_session_clash(all_events, best_solution, decode_slot)
 print("All timetable tests passed.")
 
 # Bookmark:
-# add breaks between same session type and group-make it hard constrained
+# modify ga-commit using some other name than hall of fame, to hide
 # format tt nicely-with legends and different colours for each session type
-# modify ga
 # add git.ignore
 # create a testing code to analyse the timetable like it follows all scheduling constraints
 # better the clash preferences that already exist so that it thinks abt all sessions
