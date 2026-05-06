@@ -1207,6 +1207,3 @@ test_sessions_within_working_hours(all_events, best_solution, event_duration, HO
 test_session_clash(all_events, best_solution, decode_slot)
 
 print("All timetable tests passed.")
-
-# Development note:
-# Check that this code runs correctly when pushed to GitHub.
